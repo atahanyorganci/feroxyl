@@ -1,4 +1,6 @@
+use core::fmt;
 use reqwest::Url;
+use scraper::{ElementRef, Html, Selector};
 use std::error::Error;
 
 #[derive(Debug, Clone)]
@@ -26,11 +28,9 @@ fn build_google_search_url(params: &GoogleRequestParams) -> Result<Url, Box<dyn 
     Ok(url)
 }
 
-async fn search_google(params: GoogleRequestParams) -> Result<String, Box<dyn Error>> {
+async fn send_request(params: GoogleRequestParams) -> Result<String, Box<dyn Error>> {
     let client = reqwest::Client::new();
     let url = build_google_search_url(&params)?;
-
-    println!("{}", url);
 
     let response = client
         .get(url)
@@ -59,13 +59,97 @@ async fn search_google(params: GoogleRequestParams) -> Result<String, Box<dyn Er
     Ok(html)
 }
 
+fn extract_title(element: ElementRef) -> Result<String, Box<dyn Error>> {
+    let selector = Selector::parse("div[role='link']").unwrap();
+    if let Some(element) = element.select(&selector).next() {
+        return Ok(element.text().collect::<String>());
+    }
+    let selector = Selector::parse("div[role*='link']").unwrap();
+    if let Some(element) = element.select(&selector).next() {
+        return Ok(element.text().collect::<String>());
+    }
+    let selector = Selector::parse("[data-snf='GuLy6c']").unwrap();
+    if let Some(element) = element.select(&selector).next() {
+        return Ok(element.text().collect::<String>());
+    }
+    Err("No title found".into())
+}
+
+fn extract_content(element: ElementRef) -> Option<String> {
+    let select = Selector::parse("[data-sncf*='1']").unwrap();
+    let mut content = String::with_capacity(1024);
+    for element in element.select(&select) {
+        let text = element.text();
+        for text in text {
+            content.push_str(&text);
+        }
+    }
+    if content.is_empty() {
+        None
+    } else {
+        Some(content)
+    }
+}
+
+fn extract_url(element: ElementRef) -> Result<String, Box<dyn Error>> {
+    let href = element.value().attr("href").unwrap();
+    let url = format!("https://www.google.com{}", href);
+    let url = Url::parse(&url).unwrap();
+    let url = url
+        .query_pairs()
+        .find(|(key, _)| key == "q")
+        .unwrap()
+        .1
+        .to_string();
+    Ok(url)
+}
+
+#[derive(Debug, Clone)]
+struct GoogleResult {
+    title: String,
+    url: String,
+    content: Option<String>,
+}
+
+impl fmt::Display for GoogleResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Result {{ title: {}, url: {}", self.title, self.url)?;
+        if let Some(content) = &self.content {
+            write!(f, ", content: {}", content)?;
+        }
+        write!(f, " }}")
+    }
+}
+
+fn parse_google_result(element: ElementRef) -> Result<GoogleResult, Box<dyn Error>> {
+    let title = extract_title(element)?;
+    let url = extract_url(element)?;
+    let content = extract_content(element);
+    Ok(GoogleResult {
+        title,
+        url,
+        content,
+    })
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let html = search_google(GoogleRequestParams {
+    let html = send_request(GoogleRequestParams {
         query: "Lady Gaga concert in Istanbul after 17/02/2026".to_string(),
         start: None,
     })
     .await?;
+
+    let document = Html::parse_fragment(&html);
+    let selector = Selector::parse("div.MjjYud").unwrap();
+    for element in document.select(&selector) {
+        let link_selector = Selector::parse("a[href*='/url?q=']").unwrap();
+        if let Some(link) = element.select(&link_selector).next() {
+            if let Ok(result) = parse_google_result(link) {
+                println!("{result}");
+            }
+        }
+    }
 
     println!("Extracted HTML length: {} bytes", html.len());
     Ok(())
