@@ -81,7 +81,7 @@ fn extract_content(element: ElementRef) -> Option<String> {
     for element in element.select(&select) {
         let text = element.text();
         for text in text {
-            content.push_str(&text);
+            content.push_str(text);
         }
     }
     if content.is_empty() {
