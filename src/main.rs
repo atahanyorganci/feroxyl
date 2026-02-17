@@ -91,17 +91,22 @@ fn extract_content(element: ElementRef) -> Option<String> {
     }
 }
 
-fn extract_url(element: ElementRef) -> Result<String, Box<dyn Error>> {
-    let href = element.value().attr("href").unwrap();
-    let url = format!("https://www.google.com{}", href);
-    let url = Url::parse(&url).unwrap();
-    let url = url
-        .query_pairs()
-        .find(|(key, _)| key == "q")
-        .unwrap()
-        .1
-        .to_string();
-    Ok(url)
+fn extract_url(root: ElementRef) -> Result<String, Box<dyn Error>> {
+    let link_selector = Selector::parse("a[href*='/url?q=']").unwrap();
+    if let Some(link) = root.select(&link_selector).next() {
+        let href = link.value().attr("href").unwrap();
+        let url = format!("https://www.google.com{}", href);
+        let url = Url::parse(&url).unwrap();
+        let url = url
+            .query_pairs()
+            .find(|(key, _)| key == "q")
+            .unwrap()
+            .1
+            .to_string();
+        Ok(url)
+    } else {
+        Err("No link found".into())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -143,11 +148,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let document = Html::parse_fragment(&html);
     let selector = Selector::parse("div.MjjYud").unwrap();
     for element in document.select(&selector) {
-        let link_selector = Selector::parse("a[href*='/url?q=']").unwrap();
-        if let Some(link) = element.select(&link_selector).next() {
-            if let Ok(result) = parse_google_result(link) {
-                println!("{result}");
-            }
+        if let Ok(result) = parse_google_result(element) {
+            println!("{result}");
         }
     }
 
