@@ -5,12 +5,12 @@
 //!
 //! Run with: `cargo test --test search_providers -- --ignored`
 
-use quick_start::engine::{ddg, google, run_provider, SearchParams, SearchResult, TimeRange};
+use feroxyl::engine::{ddg, google, run_provider, SearchParams, SearchResult, TimeRange};
 
 fn default_params(query: &str) -> SearchParams {
     SearchParams {
         query: query.to_string(),
-        safesearch: quick_start::engine::Safesearch::default(),
+        safesearch: feroxyl::engine::Safesearch::default(),
         time_range: TimeRange::default(),
         locale: "all".to_string(),
     }
@@ -91,7 +91,7 @@ async fn google_search_with_time_range_and_safesearch() {
     let mut provider = google::Google::new();
     let mut params = default_params("open source search");
     params.time_range = TimeRange::Month;
-    params.safesearch = quick_start::engine::Safesearch::Moderate;
+    params.safesearch = feroxyl::engine::Safesearch::Moderate;
 
     let results = run_provider(&mut provider, &client, params)
         .await

@@ -260,6 +260,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
+name = "feroxyl"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "rand",
+ "reqwest",
+ "scraper",
+ "serde",
+ "serde_urlencoded",
+ "tokio",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -854,19 +867,6 @@ checksum = "6f42ea446cab60335f76979ec15e12619a2165b5ae2c12166bef27d283a9fadf"
 dependencies = [
  "idna",
  "psl-types",
-]
-
-[[package]]
-name = "quick-start"
-version = "0.1.0"
-dependencies = [
- "axum",
- "rand",
- "reqwest",
- "scraper",
- "serde",
- "serde_urlencoded",
- "tokio",
 ]
 
 [[package]]

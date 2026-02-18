@@ -6,7 +6,7 @@ Guidance for AI agents and developers working on this codebase. Use this file to
 
 **Meta Search Engine** is a Rust library and server aggregates search results from multiple providers (DuckDuckGo, Google, etc.). It uses HTML scraping rather than official APIs, with engine implementations ported from [SearXNG](vendor/searxng/) as reference.
 
-- **Package name:** `quick-start` (in Cargo.toml)
+- **Package name:** `feroxyl` (in Cargo.toml)
 - **Edition:** Rust 2021
 - **Runtime:** Async with Tokio
 

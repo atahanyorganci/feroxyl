@@ -1,5 +1,5 @@
 use axum::{extract::Query, routing::get, Json, Router};
-use quick_start::engine::{ddg, run_provider, SearchParams};
+use feroxyl::engine::{ddg, run_provider, SearchParams};
 use std::error::Error;
 
 #[derive(serde::Deserialize)]
@@ -10,14 +10,14 @@ struct SearchQuery {
 async fn search(
     Query(query): Query<SearchQuery>,
     axum::extract::State(client): axum::extract::State<reqwest::Client>,
-) -> Json<Vec<quick_start::engine::SearchResult>> {
+) -> Json<Vec<feroxyl::engine::SearchResult>> {
     let results = run_provider(
         &mut ddg::DuckDuckGo::new(),
         &client,
         SearchParams {
             query: query.q,
-            safesearch: quick_start::engine::Safesearch::default(),
-            time_range: quick_start::engine::TimeRange::default(),
+            safesearch: feroxyl::engine::Safesearch::default(),
+            time_range: feroxyl::engine::TimeRange::default(),
             locale: "all".to_string(),
         },
     )
