@@ -4,18 +4,19 @@ use std::error::Error;
 
 #[derive(serde::Deserialize)]
 struct SearchQuery {
-    q: String,
+    #[serde(rename = "q")]
+    query: String,
 }
 
 async fn search(
-    Query(query): Query<SearchQuery>,
+    Query(SearchQuery { query }): Query<SearchQuery>,
     axum::extract::State(client): axum::extract::State<reqwest::Client>,
 ) -> Json<Vec<feroxyl::engine::SearchResult>> {
     let results = run_provider(
         &mut ddg::DuckDuckGo::new(),
         &client,
         SearchParams {
-            query: query.q,
+            query,
             safesearch: feroxyl::engine::Safesearch::default(),
             time_range: feroxyl::engine::TimeRange::default(),
             locale: feroxyl::engine::Locale::default(),
