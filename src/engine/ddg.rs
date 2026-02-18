@@ -9,57 +9,28 @@ use scraper::{Html, Selector};
 use std::collections::HashMap;
 use std::error::Error;
 
+use crate::engine::{SearchParams, TimeRange};
+
 const BASE_URL: &str = "https://html.duckduckgo.com/html/";
 const DDG_SEARCH_URL: &str = "https://duckduckgo.com/";
 
-/// Time range filter for search results
-#[derive(Debug, Clone, Copy, Default)]
-#[allow(dead_code)]
-pub enum TimeRange {
-    #[default]
-    Any,
-    Day,
-    Week,
-    Month,
-    Year,
-}
-
-impl TimeRange {
-    fn to_ddg_code(self) -> &'static str {
-        match self {
-            TimeRange::Any => "",
-            TimeRange::Day => "d",
-            TimeRange::Week => "w",
-            TimeRange::Month => "m",
-            TimeRange::Year => "y",
-        }
+/// DuckDuckGo region code from SearchParams locale.
+/// "all" -> "wt-wt"; otherwise locale lowercased with hyphens (e.g. "en-US" -> "en-us").
+fn locale_to_region(locale: &str) -> String {
+    if locale.eq_ignore_ascii_case("all") || locale.is_empty() {
+        "wt-wt".to_string()
+    } else {
+        locale.to_lowercase().replace('_', "-")
     }
 }
 
-/// Parameters for a DuckDuckGo search request
-#[derive(Debug, Clone)]
-pub struct DuckDuckGoParams {
-    /// Search query
-    pub query: String,
-    /// Page number (1-based)
-    pub page: u32,
-    /// Region/locale code (e.g. "wt-wt" for all, "en-us" for US English)
-    pub region: String,
-    /// Optional time range filter
-    pub time_range: TimeRange,
-    /// Optional VQD token from prior GET to duckduckgo.com - improves bot detection pass rate
-    pub vqd: Option<String>,
-}
-
-impl Default for DuckDuckGoParams {
-    fn default() -> Self {
-        Self {
-            query: String::new(),
-            page: 1,
-            region: "wt-wt".to_string(),
-            time_range: TimeRange::Any,
-            vqd: None,
-        }
+fn time_range_to_ddg_code(tr: TimeRange) -> &'static str {
+    match tr {
+        TimeRange::Any => "",
+        TimeRange::Day => "d",
+        TimeRange::Week => "w",
+        TimeRange::Month => "m",
+        TimeRange::Year => "y",
     }
 }
 
@@ -94,33 +65,39 @@ fn extr(txt: &str, begin: &str, end: &str) -> Option<String> {
 }
 
 /// Builds the form data for the DuckDuckGo POST request
-fn build_form_data(params: &DuckDuckGoParams) -> Result<HashMap<String, String>, Box<dyn Error>> {
+fn build_form_data(
+    query: &str,
+    page: u32,
+    region: &str,
+    time_range: TimeRange,
+    vqd: Option<&str>,
+) -> Result<HashMap<String, String>, Box<dyn Error>> {
     let mut data: HashMap<String, String> = HashMap::new();
 
-    data.insert("q".to_string(), params.query.clone());
+    data.insert("q".to_string(), query.to_string());
     data.insert("v".to_string(), "l".to_string());
     data.insert("o".to_string(), "json".to_string());
     data.insert("api".to_string(), "d.js".to_string());
-    data.insert("kl".to_string(), params.region.clone());
+    data.insert("kl".to_string(), region.to_string());
     data.insert(
         "df".to_string(),
-        params.time_range.to_ddg_code().to_string(),
+        time_range_to_ddg_code(time_range).to_string(),
     );
 
-    if params.page == 1 {
+    if page == 1 {
         data.insert("b".to_string(), String::new());
-        if let Some(ref v) = params.vqd {
-            data.insert("vqd".to_string(), v.clone());
+        if let Some(v) = vqd {
+            data.insert("vqd".to_string(), v.to_string());
         }
     } else {
         // Page 2 = offset 10, Page 3+ = 10 + (page - 2) * 15
-        let offset = 10 + (params.page.saturating_sub(2)) * 15;
+        let offset = 10 + (page.saturating_sub(2)) * 15;
         data.insert("s".to_string(), offset.to_string());
         data.insert("nextParams".to_string(), String::new());
         data.insert("dc".to_string(), (offset + 1).to_string());
 
-        if let Some(ref v) = params.vqd {
-            data.insert("vqd".to_string(), v.clone());
+        if let Some(v) = vqd {
+            data.insert("vqd".to_string(), v.to_string());
         } else {
             return Err("VQD required for pagination but could not be obtained".into());
         }
@@ -223,7 +200,7 @@ enum DdgPhase {
 /// Stateful DuckDuckGo search provider implementing SearchProvider.
 #[derive(Debug)]
 pub struct DuckDuckGo {
-    params: Option<DuckDuckGoParams>,
+    params: Option<SearchParams>,
     phase: DdgPhase,
     vqd: Option<String>,
     results: Vec<crate::engine::SearchResult>,
@@ -246,7 +223,7 @@ impl DuckDuckGo {
     }
 
     fn build_vqd_request(
-        params: &DuckDuckGoParams,
+        params: &SearchParams,
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
         let query_string = serde_urlencoded::to_string([("q", params.query.as_str())])
             .map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -269,13 +246,17 @@ impl DuckDuckGo {
 
     fn build_search_request(
         &self,
-        params: &DuckDuckGoParams,
+        params: &SearchParams,
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
-        let mut params = params.clone();
-        params.vqd = self.vqd.clone();
-
-        let form_data =
-            build_form_data(&params).map_err(|e| std::io::Error::other(e.to_string()))?;
+        let region = locale_to_region(&params.locale);
+        let form_data = build_form_data(
+            &params.query,
+            1,
+            &region,
+            params.time_range,
+            self.vqd.as_deref(),
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
         let body = serde_urlencoded::to_string(&form_data)
             .map_err(|e| std::io::Error::other(e.to_string()))?;
 
@@ -317,7 +298,7 @@ impl DuckDuckGo {
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             ),
         );
-        let cookie_value = format!("kl={}", params.region);
+        let cookie_value = format!("kl={}", region);
         headers.insert(
             HeaderName::from_static("cookie"),
             HeaderValue::try_from(cookie_value)
@@ -330,11 +311,9 @@ impl DuckDuckGo {
 }
 
 impl crate::engine::SearchProvider for DuckDuckGo {
-    type Params = DuckDuckGoParams;
-
     fn build_request(
         &mut self,
-        params: Option<Self::Params>,
+        params: Option<crate::engine::SearchParams>,
     ) -> Result<Option<reqwest::Request>, Box<dyn Error + Send + Sync>> {
         let params = params.or_else(|| self.params.clone());
         let params = match params {
@@ -352,15 +331,8 @@ impl crate::engine::SearchProvider for DuckDuckGo {
 
         match self.phase {
             DdgPhase::NeedVqd => {
-                if params.vqd.is_some() {
-                    self.vqd = params.vqd.clone();
-                    self.phase = DdgPhase::NeedSearch;
-                    let req = self.build_search_request(&params)?;
-                    Ok(Some(req))
-                } else {
-                    let req = Self::build_vqd_request(&params)?;
-                    Ok(Some(req))
-                }
+                let req = Self::build_vqd_request(&params)?;
+                Ok(Some(req))
             }
             DdgPhase::NeedSearch => {
                 let req = self.build_search_request(&params)?;
@@ -408,6 +380,7 @@ impl crate::engine::SearchProvider for DuckDuckGo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::TimeRange;
 
     #[test]
     fn test_extr() {
@@ -421,10 +394,18 @@ mod tests {
 
     #[test]
     fn test_time_range_codes() {
-        assert_eq!(TimeRange::Any.to_ddg_code(), "");
-        assert_eq!(TimeRange::Day.to_ddg_code(), "d");
-        assert_eq!(TimeRange::Week.to_ddg_code(), "w");
-        assert_eq!(TimeRange::Month.to_ddg_code(), "m");
-        assert_eq!(TimeRange::Year.to_ddg_code(), "y");
+        assert_eq!(time_range_to_ddg_code(TimeRange::Any), "");
+        assert_eq!(time_range_to_ddg_code(TimeRange::Day), "d");
+        assert_eq!(time_range_to_ddg_code(TimeRange::Week), "w");
+        assert_eq!(time_range_to_ddg_code(TimeRange::Month), "m");
+        assert_eq!(time_range_to_ddg_code(TimeRange::Year), "y");
+    }
+
+    #[test]
+    fn test_locale_to_region() {
+        assert_eq!(locale_to_region("all"), "wt-wt");
+        assert_eq!(locale_to_region(""), "wt-wt");
+        assert_eq!(locale_to_region("en-US"), "en-us");
+        assert_eq!(locale_to_region("en_US"), "en-us");
     }
 }

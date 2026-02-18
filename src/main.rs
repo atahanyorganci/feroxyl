@@ -1,34 +1,6 @@
 use axum::{extract::Query, routing::get, Json, Router};
-use quick_start::engine::{ddg, SearchProvider};
+use quick_start::engine::{ddg, run_provider, SearchParams};
 use std::error::Error;
-
-async fn run_provider<P: SearchProvider>(
-    provider: &mut P,
-    client: &reqwest::Client,
-    params: P::Params,
-) -> Result<Vec<quick_start::engine::SearchResult>, Box<dyn Error + Send + Sync>> {
-    let mut all = Vec::new();
-    let mut params = Some(params);
-
-    loop {
-        let req = match provider.build_request(params.take()) {
-            Ok(Some(r)) => r,
-            Ok(None) => break,
-            Err(e) => return Err(e),
-        };
-        let response = client.execute(req).await?;
-        let body = response.text().await?;
-        provider.parse_response(&body)?;
-
-        while let Some(r) = provider.results() {
-            match r {
-                Ok(sr) => all.extend(sr),
-                Err(e) => return Err(e),
-            }
-        }
-    }
-    Ok(all)
-}
 
 #[derive(serde::Deserialize)]
 struct SearchQuery {
@@ -42,12 +14,11 @@ async fn search(
     let results = run_provider(
         &mut ddg::DuckDuckGo::new(),
         &client,
-        ddg::DuckDuckGoParams {
+        SearchParams {
             query: query.q,
-            page: 1,
-            region: "wt-wt".to_string(),
-            time_range: ddg::TimeRange::Any,
-            vqd: None,
+            safesearch: quick_start::engine::Safesearch::default(),
+            time_range: quick_start::engine::TimeRange::default(),
+            locale: "all".to_string(),
         },
     )
     .await

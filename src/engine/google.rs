@@ -1,4 +1,6 @@
 //! Google search engine
+//!
+//! Port of SearXNG's google.py engine. Uses async/arc HTML format.
 
 use rand::Rng;
 use reqwest::header::{HeaderName, HeaderValue};
@@ -8,35 +10,57 @@ use scraper::{ElementRef, Html, Selector};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use crate::engine::{SearchProvider, SearchResult};
+use crate::engine::{SearchParams, SearchProvider, SearchResult};
 
 /// Charset for arc_id random string (matches SearXNG: a-zA-Z0-9_-)
 const ARC_ID_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
 
-/// Parameters for a Google search request
-#[derive(Debug, Clone, Default)]
-pub struct GoogleRequestParams {
-    pub query: String,
-    pub start: Option<u32>,
+/// Time range to Google tbs (qdr:) code
+fn time_range_to_google_tbs(tr: crate::engine::TimeRange) -> Option<&'static str> {
+    match tr {
+        crate::engine::TimeRange::Any => None,
+        crate::engine::TimeRange::Day => Some("d"),
+        crate::engine::TimeRange::Week => Some("w"),
+        crate::engine::TimeRange::Month => Some("m"),
+        crate::engine::TimeRange::Year => Some("y"),
+    }
+}
+
+/// Safesearch to Google safe param
+fn safesearch_to_google(s: crate::engine::Safesearch) -> &'static str {
+    match s {
+        crate::engine::Safesearch::Off => "off",
+        crate::engine::Safesearch::Moderate => "medium",
+        crate::engine::Safesearch::Strict => "high",
+    }
 }
 
 fn build_google_search_url(
-    params: &GoogleRequestParams,
+    params: &SearchParams,
     async_param: &str,
 ) -> Result<Url, Box<dyn Error>> {
-    let start = params.start.unwrap_or(0);
+    let start = 0u32;
     let mut url = Url::parse("https://www.google.com/search")?;
-    url.query_pairs_mut()
-        .append_pair("q", &params.query)
-        .append_pair("hl", "en-US")
-        .append_pair("lr", "lang_en")
-        .append_pair("cr", "countryUS")
-        .append_pair("ie", "utf8")
-        .append_pair("oe", "utf8")
-        .append_pair("filter", "0")
-        .append_pair("start", &start.to_string())
-        .append_pair("asearch", "arc")
-        .append_pair("async", async_param);
+    {
+        let mut pairs = url.query_pairs_mut();
+        pairs
+            .append_pair("q", &params.query)
+            .append_pair("hl", "en-US")
+            .append_pair("lr", "lang_en")
+            .append_pair("cr", "countryUS")
+            .append_pair("ie", "utf8")
+            .append_pair("oe", "utf8")
+            .append_pair("filter", "0")
+            .append_pair("start", &start.to_string())
+            .append_pair("asearch", "arc")
+            .append_pair("async", async_param);
+        if let Some(tbs) = time_range_to_google_tbs(params.time_range) {
+            pairs.append_pair("tbs", &format!("qdr:{}", tbs));
+        }
+        if params.safesearch != crate::engine::Safesearch::Off {
+            pairs.append_pair("safe", safesearch_to_google(params.safesearch));
+        }
+    }
     Ok(url)
 }
 
@@ -150,18 +174,16 @@ impl Google {
 }
 
 impl SearchProvider for Google {
-    type Params = GoogleRequestParams;
-
     fn build_request(
         &mut self,
-        params: Option<Self::Params>,
+        params: Option<SearchParams>,
     ) -> Result<Option<reqwest::Request>, Box<dyn Error + Send + Sync>> {
         let params = match params {
             Some(p) => p,
             None => return Ok(None),
         };
 
-        let start = params.start.unwrap_or(0);
+        let start = 0u32;
         let async_param = self.ui_async(start);
         let url = build_google_search_url(&params, &async_param)
             .map_err(|e| std::io::Error::other(e.to_string()))?;
