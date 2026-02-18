@@ -10,59 +10,59 @@ use scraper::{ElementRef, Html, Selector};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use crate::engine::{SearchParams, SearchProvider, SearchResult};
+use crate::engine::{Locale, Safesearch, SearchParams, SearchProvider, SearchResult, TimeRange};
 
 /// Charset for arc_id random string (matches SearXNG: a-zA-Z0-9_-)
 const ARC_ID_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
 
 /// Time range to Google tbs (qdr:) code
-fn time_range_to_google_tbs(tr: crate::engine::TimeRange) -> Option<&'static str> {
+fn time_range_to_google_tbs(tr: TimeRange) -> Option<&'static str> {
     match tr {
-        crate::engine::TimeRange::Any => None,
-        crate::engine::TimeRange::Day => Some("d"),
-        crate::engine::TimeRange::Week => Some("w"),
-        crate::engine::TimeRange::Month => Some("m"),
-        crate::engine::TimeRange::Year => Some("y"),
+        TimeRange::Any => None,
+        TimeRange::Day => Some("d"),
+        TimeRange::Week => Some("w"),
+        TimeRange::Month => Some("m"),
+        TimeRange::Year => Some("y"),
     }
 }
 
 /// Safesearch to Google safe param
-fn safesearch_to_google(s: crate::engine::Safesearch) -> &'static str {
+fn safesearch_to_google(s: Safesearch) -> &'static str {
     match s {
-        crate::engine::Safesearch::Off => "off",
-        crate::engine::Safesearch::Moderate => "medium",
-        crate::engine::Safesearch::Strict => "high",
+        Safesearch::Off => "off",
+        Safesearch::Moderate => "medium",
+        Safesearch::Strict => "high",
     }
 }
 
 /// Google hl (interface language) param.
-fn locale_to_google_hl(locale: &crate::engine::Locale) -> &str {
+fn locale_to_google_hl(locale: &Locale) -> &str {
     match locale {
-        crate::engine::Locale::All | crate::engine::Locale::EnUS => "en-US",
-        crate::engine::Locale::EnGB => "en-GB",
-        crate::engine::Locale::TrTR => "tr",
-        crate::engine::Locale::Other(s) => s.as_str(),
+        Locale::All | Locale::EnUS => "en-US",
+        Locale::EnGB => "en-GB",
+        Locale::TrTR => "tr",
+        Locale::Other(s) => s.as_str(),
     }
 }
 
 /// Google lr (language restriction) param, e.g. "lang_en".
-fn locale_to_google_lr(locale: &crate::engine::Locale) -> Option<&'static str> {
+fn locale_to_google_lr(locale: &Locale) -> Option<&'static str> {
     match locale {
-        crate::engine::Locale::All => None,
-        crate::engine::Locale::EnUS | crate::engine::Locale::EnGB => Some("lang_en"),
-        crate::engine::Locale::TrTR => Some("lang_tr"),
-        crate::engine::Locale::Other(_) => None,
+        Locale::All => None,
+        Locale::EnUS | Locale::EnGB => Some("lang_en"),
+        Locale::TrTR => Some("lang_tr"),
+        Locale::Other(_) => None,
     }
 }
 
 /// Google cr (country restriction) param, e.g. "countryUS".
-fn locale_to_google_cr(locale: &crate::engine::Locale) -> Option<&'static str> {
+fn locale_to_google_cr(locale: &Locale) -> Option<&'static str> {
     match locale {
-        crate::engine::Locale::All => None,
-        crate::engine::Locale::EnUS => Some("countryUS"),
-        crate::engine::Locale::EnGB => Some("countryGB"),
-        crate::engine::Locale::TrTR => Some("countryTR"),
-        crate::engine::Locale::Other(_) => None,
+        Locale::All => None,
+        Locale::EnUS => Some("countryUS"),
+        Locale::EnGB => Some("countryGB"),
+        Locale::TrTR => Some("countryTR"),
+        Locale::Other(_) => None,
     }
 }
 
@@ -93,7 +93,7 @@ fn build_google_search_url(
         if let Some(tbs) = time_range_to_google_tbs(params.time_range) {
             pairs.append_pair("tbs", &format!("qdr:{}", tbs));
         }
-        if params.safesearch != crate::engine::Safesearch::Off {
+        if params.safesearch != Safesearch::Off {
             pairs.append_pair("safe", safesearch_to_google(params.safesearch));
         }
     }
