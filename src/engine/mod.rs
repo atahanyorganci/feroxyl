@@ -6,7 +6,7 @@ pub mod ddg;
 pub mod google;
 
 /// Unified search result type for all providers
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SearchResult {
     pub title: String,
     pub url: String,

@@ -1,14 +1,6 @@
-use quick_start::engine::{ddg, google, SearchProvider};
+use axum::{extract::Query, routing::get, Json, Router};
+use quick_start::engine::{ddg, SearchProvider};
 use std::error::Error;
-
-fn print_results(results: &[quick_start::engine::SearchResult]) {
-    for r in results {
-        println!("  - {} ({})", r.title, r.url);
-        if let Some(ref content) = r.content {
-            println!("    {}", content);
-        }
-    }
-}
 
 async fn run_provider<P: SearchProvider>(
     provider: &mut P,
@@ -38,38 +30,40 @@ async fn run_provider<P: SearchProvider>(
     Ok(all)
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
-    let client = reqwest::Client::new();
+#[derive(serde::Deserialize)]
+struct SearchQuery {
+    q: String,
+}
 
-    println!("DuckDuckGo results:");
-    let mut ddg_provider = ddg::DuckDuckGo::new();
+async fn search(
+    Query(query): Query<SearchQuery>,
+    axum::extract::State(client): axum::extract::State<reqwest::Client>,
+) -> Json<Vec<quick_start::engine::SearchResult>> {
     let results = run_provider(
-        &mut ddg_provider,
+        &mut ddg::DuckDuckGo::new(),
         &client,
         ddg::DuckDuckGoParams {
-            query: "Rust programming".to_string(),
+            query: query.q,
             page: 1,
             region: "wt-wt".to_string(),
             time_range: ddg::TimeRange::Any,
             vqd: None,
         },
     )
-    .await?;
-    print_results(&results);
+    .await
+    .unwrap_or_default();
+    Json(results)
+}
 
-    println!("\nGoogle results:");
-    let mut google_provider = google::Google::new();
-    let results = run_provider(
-        &mut google_provider,
-        &client,
-        google::GoogleRequestParams {
-            query: "Lady Gaga concert in Istanbul after 17/02/2026".to_string(),
-            start: None,
-        },
-    )
-    .await?;
-    print_results(&results);
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+    let client = reqwest::Client::new();
+    let app = Router::new()
+        .route("/search", get(search))
+        .with_state(client);
 
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
+    println!("Listening on http://127.0.0.1:3000");
+    axum::serve(listener, app).await?;
     Ok(())
 }
