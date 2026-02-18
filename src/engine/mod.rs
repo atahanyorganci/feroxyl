@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use std::error::Error;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod bing;
 mod brave;
@@ -159,6 +159,7 @@ pub struct RankedSearchResult {
 pub async fn run_provider<P: SearchProvider>(
     params: &SearchParams,
 ) -> Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>> {
+    let start = Instant::now();
     let mut provider = P::default();
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(3))
@@ -176,11 +177,23 @@ pub async fn run_provider<P: SearchProvider>(
 
         match provider.results() {
             Some(Ok(results)) => {
-                tracing::info!(count = results.len(), "Provider completed");
+                let elapsed = start.elapsed();
+                tracing::info!(
+                    provider = P::name(),
+                    count = results.len(),
+                    elapsed_ms = elapsed.as_millis(),
+                    "Provider completed"
+                );
                 break Ok(results);
             }
             Some(Err(e)) => {
-                tracing::error!(error = %e, "Provider failed");
+                let elapsed = start.elapsed();
+                tracing::error!(
+                    provider = P::name(),
+                    error = %e,
+                    elapsed_ms = elapsed.as_millis(),
+                    "Provider failed"
+                );
                 return Err(e);
             }
             None => {}
@@ -193,6 +206,7 @@ pub async fn run_meta_search(
     providers: &[Provider],
     params: &SearchParams,
 ) -> Result<Vec<RankedSearchResult>, Box<dyn Error + Send + Sync>> {
+    let start = Instant::now();
     tracing::debug!("Starting parallel provider queries");
     let mut results_set = JoinSet::new();
     for provider in providers {
@@ -249,7 +263,12 @@ pub async fn run_meta_search(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    tracing::info!(count = ranked.len(), "Meta search completed");
+    let elapsed = start.elapsed();
+    tracing::info!(
+        count = ranked.len(),
+        elapsed_ms = elapsed.as_millis(),
+        "Meta search completed"
+    );
     Ok(ranked)
 }
 

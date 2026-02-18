@@ -56,7 +56,7 @@ struct SearchQuery {
     providers: Vec<Provider>,
 }
 
-#[tracing::instrument(skip_all, fields(query = %query, safesearch = ?safesearch, time_range = ?time_range, locale = %locale, providers = ?providers))]
+#[tracing::instrument(skip_all, fields(query = %query, safesearch = ?safesearch, time_range = ?time_range, locale = %locale))]
 async fn search(
     Query(SearchQuery {
         query,
