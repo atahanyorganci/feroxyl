@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
 
+pub mod brave;
 pub mod ddg;
 pub mod google;
 
@@ -186,9 +187,10 @@ pub async fn run_meta_search(
     params: &SearchParams,
 ) -> Result<Vec<RankedSearchResult>, Box<dyn Error + Send + Sync>> {
     tracing::debug!("Starting parallel provider queries");
-    let (ddg_res, google_res) = tokio::join!(
+    let (ddg_res, google_res, brave_res) = tokio::join!(
         run_provider::<ddg::DuckDuckGo>(params),
         run_provider::<google::Google>(params),
+        run_provider::<brave::Brave>(params),
     );
 
     let ddg_results = ddg_res.unwrap_or_else(|e| {
@@ -197,6 +199,10 @@ pub async fn run_meta_search(
     });
     let google_results = google_res.unwrap_or_else(|e| {
         tracing::warn!(error = %e, provider = "google", "Provider failed, using empty results");
+        Vec::new()
+    });
+    let brave_results = brave_res.unwrap_or_else(|e| {
+        tracing::warn!(error = %e, provider = "brave", "Provider failed, using empty results");
         Vec::new()
     });
 
@@ -237,6 +243,22 @@ pub async fn run_meta_search(
                 url: r.url,
                 content: r.content,
                 position: vec![(google::Google::name(), pos + 1)],
+                score: 1.0 / (pos + 1) as f32,
+            });
+    }
+
+    for (pos, r) in brave_results.into_iter().enumerate() {
+        merged
+            .entry(r.url.clone())
+            .and_modify(|existing| {
+                existing.position.push((brave::Brave::name(), pos + 1));
+                existing.score += 1.0 / ((pos + 1) as f32);
+            })
+            .or_insert_with(|| RankedSearchResult {
+                title: r.title,
+                url: r.url,
+                content: r.content,
+                position: vec![(brave::Brave::name(), pos + 1)],
                 score: 1.0 / (pos + 1) as f32,
             });
     }

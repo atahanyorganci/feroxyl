@@ -65,3 +65,6 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     axum::serve(listener, app).await?;
     Ok(())
 }
+
+// Temporary: run brave search and print response info
+// Run with: cargo run -- brave-debug rust
