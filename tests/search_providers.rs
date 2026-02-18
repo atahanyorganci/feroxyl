@@ -28,15 +28,8 @@ fn assert_valid_results(results: &[SearchResult]) {
 #[tokio::test]
 #[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
 async fn duckduckgo_search_returns_results() {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .expect("reqwest client");
-
-    let mut provider = ddg::DuckDuckGo::new();
     let params = default_params("rust programming");
-
-    let results = run_provider(&mut provider, &client, params)
+    let results = run_provider::<ddg::DuckDuckGo>(&params)
         .await
         .expect("DuckDuckGo search should succeed");
 
@@ -46,16 +39,10 @@ async fn duckduckgo_search_returns_results() {
 #[tokio::test]
 #[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
 async fn duckduckgo_search_with_time_range() {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .expect("reqwest client");
-
-    let mut provider = ddg::DuckDuckGo::new();
     let mut params = default_params("searxng");
     params.time_range = TimeRange::Week;
 
-    let results = run_provider(&mut provider, &client, params)
+    let results = run_provider::<ddg::DuckDuckGo>(&params)
         .await
         .expect("DuckDuckGo search with time range should succeed");
 
@@ -65,15 +52,9 @@ async fn duckduckgo_search_with_time_range() {
 #[tokio::test]
 #[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
 async fn google_search_returns_results() {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .expect("reqwest client");
-
-    let mut provider = google::Google::new();
     let params = default_params("rust programming");
 
-    let results = run_provider(&mut provider, &client, params)
+    let results = run_provider::<google::Google>(&params)
         .await
         .expect("Google search should succeed");
 
@@ -83,17 +64,11 @@ async fn google_search_returns_results() {
 #[tokio::test]
 #[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
 async fn google_search_with_time_range_and_safesearch() {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .expect("reqwest client");
-
-    let mut provider = google::Google::new();
     let mut params = default_params("open source search");
     params.time_range = TimeRange::Month;
     params.safesearch = feroxyl::engine::Safesearch::Moderate;
 
-    let results = run_provider(&mut provider, &client, params)
+    let results = run_provider::<google::Google>(&params)
         .await
         .expect("Google search with filters should succeed");
 

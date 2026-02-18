@@ -1,8 +1,4 @@
-use axum::{
-    extract::{Query, State},
-    routing::get,
-    Json, Router,
-};
+use axum::{extract::Query, routing::get, Json, Router};
 use feroxyl::engine::{ddg, run_provider, SearchParams, SearchResult};
 use std::error::Error;
 
@@ -25,20 +21,16 @@ async fn search(
         time_range,
         locale,
     }): Query<SearchQuery>,
-    State(client): State<reqwest::Client>,
 ) -> Json<Vec<SearchResult>> {
-    let results = run_provider(
-        &mut ddg::DuckDuckGo::new(),
-        &client,
-        SearchParams {
-            query,
-            safesearch,
-            time_range,
-            locale,
-        },
-    )
-    .await
-    .unwrap_or_default();
+    let params = SearchParams {
+        query,
+        safesearch,
+        time_range,
+        locale,
+    };
+    let results = run_provider::<ddg::DuckDuckGo>(&params)
+        .await
+        .unwrap_or_default();
     Json(results)
 }
 

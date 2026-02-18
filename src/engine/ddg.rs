@@ -9,7 +9,7 @@ use scraper::{Html, Selector};
 use std::collections::HashMap;
 use std::error::Error;
 
-use crate::engine::{Locale, SearchParams, TimeRange};
+use crate::engine::{Locale, SearchParams, SearchResult, TimeRange};
 
 const BASE_URL: &str = "https://html.duckduckgo.com/html/";
 const DDG_SEARCH_URL: &str = "https://duckduckgo.com/";
@@ -201,16 +201,14 @@ enum DdgPhase {
 /// Stateful DuckDuckGo search provider implementing SearchProvider.
 #[derive(Debug)]
 pub struct DuckDuckGo {
-    params: Option<SearchParams>,
     phase: DdgPhase,
     vqd: Option<String>,
-    results: Vec<crate::engine::SearchResult>,
+    results: Vec<SearchResult>,
 }
 
 impl Default for DuckDuckGo {
     fn default() -> Self {
         Self {
-            params: None,
             phase: DdgPhase::NeedVqd,
             vqd: None,
             results: Vec::with_capacity(32),
@@ -219,10 +217,6 @@ impl Default for DuckDuckGo {
 }
 
 impl DuckDuckGo {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     fn build_vqd_request(
         params: &SearchParams,
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
@@ -314,33 +308,23 @@ impl DuckDuckGo {
 impl crate::engine::SearchProvider for DuckDuckGo {
     fn build_request(
         &mut self,
-        params: Option<crate::engine::SearchParams>,
-    ) -> Result<Option<reqwest::Request>, Box<dyn Error + Send + Sync>> {
-        let params = params.or_else(|| self.params.clone());
-        let params = match params {
-            Some(p) => p,
-            None => return Ok(None),
-        };
-
+        params: &SearchParams,
+    ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
         if params.query.len() >= 500 {
             return Err("Query too long (max 499 characters)".into());
         }
 
-        if self.params.is_none() {
-            self.params = Some(params.clone());
-        }
-
         match self.phase {
             DdgPhase::NeedVqd => {
-                let req = Self::build_vqd_request(&params)?;
-                Ok(Some(req))
+                let req = Self::build_vqd_request(params)?;
+                Ok(req)
             }
             DdgPhase::NeedSearch => {
-                let req = self.build_search_request(&params)?;
+                let req = self.build_search_request(params)?;
                 self.phase = DdgPhase::Done;
-                Ok(Some(req))
+                Ok(req)
             }
-            DdgPhase::Done => Ok(None),
+            DdgPhase::Done => Err("No more requests".into()),
         }
     }
 

@@ -172,19 +172,15 @@ pub struct Google {
 
 impl Default for Google {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Google {
-    pub fn new() -> Self {
         Self {
             results: Vec::with_capacity(32),
             arc_id_prefix: None,
             arc_id_created_at: None,
         }
     }
+}
 
+impl Google {
     /// Format of the async parameter for Google's arc UI.
     /// arc_id is randomly generated and cached for 1 hour on the provider.
     fn ui_async(&mut self, start: u32) -> String {
@@ -212,16 +208,11 @@ impl Google {
 impl SearchProvider for Google {
     fn build_request(
         &mut self,
-        params: Option<SearchParams>,
-    ) -> Result<Option<reqwest::Request>, Box<dyn Error + Send + Sync>> {
-        let params = match params {
-            Some(p) => p,
-            None => return Ok(None),
-        };
-
+        params: &SearchParams,
+    ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
         let start = 0u32;
         let async_param = self.ui_async(start);
-        let url = build_google_search_url(&params, &async_param)
+        let url = build_google_search_url(params, &async_param)
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         let mut request = reqwest::Request::new(Method::GET, url);
         let headers = request.headers_mut();
@@ -259,7 +250,7 @@ impl SearchProvider for Google {
             HeaderName::from_static("cookie"),
             HeaderValue::from_static("CONSENT=YES+"),
         );
-        Ok(Some(request))
+        Ok(request)
     }
 
     fn parse_response(&mut self, body: &str) -> Result<(), Box<dyn Error + Send + Sync>> {

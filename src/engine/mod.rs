@@ -132,41 +132,33 @@ pub struct SearchParams {
 
 /// Runs a search provider until completion, executing HTTP requests with the given client.
 pub async fn run_provider<P: SearchProvider>(
-    provider: &mut P,
-    client: &reqwest::Client,
-    params: SearchParams,
+    params: &SearchParams,
 ) -> Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>> {
-    let mut all = Vec::new();
-    let mut params = Some(params);
-
+    let mut provider = P::default();
+    let client = reqwest::Client::new();
     loop {
-        let req = match provider.build_request(params.take()) {
-            Ok(Some(r)) => r,
-            Ok(None) => break,
-            Err(e) => return Err(e),
-        };
-        let response = client.execute(req).await?;
+        let request = provider.build_request(&params)?;
+        let response = client.execute(request).await?;
         let body = response.text().await?;
         provider.parse_response(&body)?;
 
-        while let Some(r) = provider.results() {
-            match r {
-                Ok(sr) => all.extend(sr),
-                Err(e) => return Err(e),
-            }
+        if let Some(r) = provider.results() {
+            break r;
         }
     }
-    Ok(all)
 }
 
 /// Trait for search providers as a state machine. HTTP execution is handled externally.
-pub trait SearchProvider {
+pub trait SearchProvider
+where
+    Self: Default,
+{
     /// Build the next request to send. Returns None when no more requests.
     /// params: Some on first call, None on continuation (provider uses stored state).
     fn build_request(
         &mut self,
-        params: Option<SearchParams>,
-    ) -> Result<Option<reqwest::Request>, Box<dyn Error + Send + Sync>>;
+        params: &SearchParams,
+    ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>>;
 
     /// Parse an HTTP response body. Updates internal state (e.g. result queue).
     fn parse_response(&mut self, body: &str) -> Result<(), Box<dyn Error + Send + Sync>>;
