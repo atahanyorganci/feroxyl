@@ -6,7 +6,7 @@
 //! Run with: `cargo test --test search_providers -- --ignored`
 
 use feroxyl::engine::{
-    run_meta_search, run_provider, Bing, Brave, DuckDuckGo, Google, RankedSearchResult,
+    run_meta_search, run_provider, Bing, Brave, DuckDuckGo, Google, Provider, RankedSearchResult,
     SearchParams, SearchResult, Startpage, TimeRange,
 };
 
@@ -57,8 +57,15 @@ async fn duckduckgo_search_returns_results() {
 #[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
 async fn meta_search_returns_merged_results() {
     let params = default_params("rust programming");
+    let providers = [
+        Provider::DuckDuckGo,
+        Provider::Google,
+        Provider::Brave,
+        Provider::Startpage,
+        Provider::Bing,
+    ];
 
-    let results = run_meta_search(&params)
+    let results = run_meta_search(&providers, &params)
         .await
         .expect("meta search should succeed");
 

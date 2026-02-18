@@ -12,6 +12,8 @@ mod ddg;
 mod google;
 mod startpage;
 
+use tokio::task::JoinSet;
+
 pub use {bing::Bing, brave::Brave, ddg::DuckDuckGo, google::Google, startpage::Startpage};
 
 /// Unified search result type for all providers
@@ -188,83 +190,56 @@ pub async fn run_provider<P: SearchProvider>(
 
 #[tracing::instrument(skip(params), fields(query = %params.query))]
 pub async fn run_meta_search(
+    providers: &[Provider],
     params: &SearchParams,
 ) -> Result<Vec<RankedSearchResult>, Box<dyn Error + Send + Sync>> {
     tracing::debug!("Starting parallel provider queries");
-    let (ddg_res, google_res, brave_res) = tokio::join!(
-        run_provider::<ddg::DuckDuckGo>(params),
-        run_provider::<google::Google>(params),
-        run_provider::<brave::Brave>(params),
-    );
-
-    let ddg_results = ddg_res.unwrap_or_else(|e| {
-        tracing::warn!(error = %e, provider = "ddg", "Provider failed, using empty results");
-        Vec::new()
-    });
-    let google_results = google_res.unwrap_or_else(|e| {
-        tracing::warn!(error = %e, provider = "google", "Provider failed, using empty results");
-        Vec::new()
-    });
-    let brave_results = brave_res.unwrap_or_else(|e| {
-        tracing::warn!(error = %e, provider = "brave", "Provider failed, using empty results");
-        Vec::new()
-    });
-
-    tracing::debug!(
-        ddg_count = ddg_results.len(),
-        google_count = google_results.len(),
-        "Provider results received"
-    );
+    let mut results_set = JoinSet::new();
+    for provider in providers {
+        let name = provider.name();
+        tracing::debug!(provider = name, "Spawning provider");
+        let provider = *provider;
+        let params = params.clone();
+        results_set
+            .spawn(async move { provider.run(&params).await.map(|results| (name, results)) });
+    }
 
     let mut merged: HashMap<String, RankedSearchResult> = HashMap::new();
 
-    for (pos, r) in ddg_results.into_iter().enumerate() {
-        let engine_name = ddg::DuckDuckGo::name();
-        merged
-            .entry(r.url.clone())
-            .and_modify(|existing| {
-                existing.position.push((engine_name, pos + 1));
-                existing.score += 1.0 / ((pos + 1) as f32);
-            })
-            .or_insert_with(|| RankedSearchResult {
-                title: r.title,
-                url: r.url,
-                content: r.content,
-                position: vec![(engine_name, pos + 1)],
-                score: 1.0 / (pos + 1) as f32,
-            });
-    }
-
-    for (pos, r) in google_results.into_iter().enumerate() {
-        merged
-            .entry(r.url.clone())
-            .and_modify(|existing| {
-                existing.position.push((google::Google::name(), pos + 1));
-                existing.score += 1.0 / ((pos + 1) as f32);
-            })
-            .or_insert_with(|| RankedSearchResult {
-                title: r.title,
-                url: r.url,
-                content: r.content,
-                position: vec![(google::Google::name(), pos + 1)],
-                score: 1.0 / (pos + 1) as f32,
-            });
-    }
-
-    for (pos, r) in brave_results.into_iter().enumerate() {
-        merged
-            .entry(r.url.clone())
-            .and_modify(|existing| {
-                existing.position.push((brave::Brave::name(), pos + 1));
-                existing.score += 1.0 / ((pos + 1) as f32);
-            })
-            .or_insert_with(|| RankedSearchResult {
-                title: r.title,
-                url: r.url,
-                content: r.content,
-                position: vec![(brave::Brave::name(), pos + 1)],
-                score: 1.0 / (pos + 1) as f32,
-            });
+    while let Some(join_result) = results_set.join_next().await {
+        let (engine_name, results) = match join_result {
+            Ok(Ok((name, results))) => {
+                tracing::debug!(provider = name, count = results.len(), "Provider completed");
+                (name, results)
+            }
+            Ok(Err(e)) => {
+                tracing::warn!(error = %e, "Provider failed");
+                continue;
+            }
+            Err(e) => {
+                if e.is_cancelled() {
+                    break;
+                } else {
+                    tracing::warn!(error = %e, "Provider failed");
+                    continue;
+                }
+            }
+        };
+        for (pos, r) in results.into_iter().enumerate() {
+            merged
+                .entry(r.url.clone())
+                .and_modify(|existing| {
+                    existing.position.push((engine_name, pos + 1));
+                    existing.score += 1.0 / ((pos + 1) as f32);
+                })
+                .or_insert_with(|| RankedSearchResult {
+                    title: r.title,
+                    url: r.url,
+                    content: r.content,
+                    position: vec![(engine_name, pos + 1)],
+                    score: 1.0 / (pos + 1) as f32,
+                });
+        }
     }
 
     let mut ranked: Vec<RankedSearchResult> = merged.into_values().collect();
@@ -297,4 +272,38 @@ where
 
     /// Yield the next result. None when no more results; caller loops back to build_request.
     fn results(&mut self) -> Option<Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>>>;
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Provider {
+    DuckDuckGo,
+    Google,
+    Brave,
+    Startpage,
+    Bing,
+}
+
+impl Provider {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Provider::DuckDuckGo => DuckDuckGo::name(),
+            Provider::Google => Google::name(),
+            Provider::Brave => Brave::name(),
+            Provider::Startpage => Startpage::name(),
+            Provider::Bing => Bing::name(),
+        }
+    }
+
+    pub async fn run(
+        &self,
+        params: &SearchParams,
+    ) -> Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>> {
+        match self {
+            Provider::DuckDuckGo => run_provider::<DuckDuckGo>(params).await,
+            Provider::Google => run_provider::<Google>(params).await,
+            Provider::Brave => run_provider::<Brave>(params).await,
+            Provider::Startpage => run_provider::<Startpage>(params).await,
+            Provider::Bing => run_provider::<Bing>(params).await,
+        }
+    }
 }

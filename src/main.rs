@@ -1,5 +1,5 @@
 use axum::{extract::Query, routing::get, Json, Router};
-use feroxyl::engine::{run_meta_search, RankedSearchResult, SearchParams};
+use feroxyl::engine::{run_meta_search, Provider, RankedSearchResult, SearchParams};
 use std::error::Error;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -32,7 +32,13 @@ async fn search(
         locale,
     };
     tracing::info!("Starting meta search");
-    let results = match run_meta_search(&params).await {
+    let providers = [
+        Provider::DuckDuckGo,
+        Provider::Google,
+        Provider::Brave,
+        Provider::Startpage,
+    ];
+    let results = match run_meta_search(&providers, &params).await {
         Ok(r) => {
             tracing::info!(count = r.len(), "Meta search completed");
             r
