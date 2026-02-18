@@ -1,12 +1,17 @@
 //! Google search engine
 
+use rand::Rng;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::Method;
 use reqwest::Url;
 use scraper::{ElementRef, Html, Selector};
 use std::error::Error;
+use std::time::{Duration, Instant};
 
 use crate::engine::{SearchProvider, SearchResult};
+
+/// Charset for arc_id random string (matches SearXNG: a-zA-Z0-9_-)
+const ARC_ID_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
 
 /// Parameters for a Google search request
 #[derive(Debug, Clone, Default)]
@@ -15,7 +20,11 @@ pub struct GoogleRequestParams {
     pub start: Option<u32>,
 }
 
-fn build_google_search_url(params: &GoogleRequestParams) -> Result<Url, Box<dyn Error>> {
+fn build_google_search_url(
+    params: &GoogleRequestParams,
+    async_param: &str,
+) -> Result<Url, Box<dyn Error>> {
+    let start = params.start.unwrap_or(0);
     let mut url = Url::parse("https://www.google.com/search")?;
     url.query_pairs_mut()
         .append_pair("q", &params.query)
@@ -25,12 +34,9 @@ fn build_google_search_url(params: &GoogleRequestParams) -> Result<Url, Box<dyn 
         .append_pair("ie", "utf8")
         .append_pair("oe", "utf8")
         .append_pair("filter", "0")
-        .append_pair("start", &params.start.unwrap_or(0).to_string())
+        .append_pair("start", &start.to_string())
         .append_pair("asearch", "arc")
-        .append_pair(
-            "async",
-            "arc_id:srp_OYU6IpFlzDNEiO26LbU1F7p_100,use_ac:true,_fmt:prog",
-        );
+        .append_pair("async", async_param);
     Ok(url)
 }
 
@@ -96,16 +102,50 @@ fn parse_google_result(element: ElementRef) -> Result<SearchResult, Box<dyn Erro
 }
 
 /// Stateful Google search provider implementing SearchProvider.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Google {
     results: Vec<SearchResult>,
+    /// arc_id prefix, regenerated every hour (SearXNG behavior)
+    arc_id_prefix: Option<String>,
+    arc_id_created_at: Option<Instant>,
+}
+
+impl Default for Google {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Google {
     pub fn new() -> Self {
         Self {
             results: Vec::with_capacity(32),
+            arc_id_prefix: None,
+            arc_id_created_at: None,
         }
+    }
+
+    /// Format of the async parameter for Google's arc UI.
+    /// arc_id is randomly generated and cached for 1 hour on the provider.
+    fn ui_async(&mut self, start: u32) -> String {
+        let invalidate = self.arc_id_prefix.is_none()
+            || self
+                .arc_id_created_at
+                .map(|t| t.elapsed() > Duration::from_secs(3600))
+                .unwrap_or(true);
+
+        if invalidate {
+            let mut rng = rand::rng();
+            self.arc_id_prefix = Some(
+                (0..23)
+                    .map(|_| ARC_ID_CHARSET[rng.random_range(0..ARC_ID_CHARSET.len())] as char)
+                    .collect(),
+            );
+            self.arc_id_created_at = Some(Instant::now());
+        }
+
+        let prefix = self.arc_id_prefix.as_ref().unwrap();
+        format!("arc_id:srp_{}_1{:02},use_ac:true,_fmt:prog", prefix, start)
     }
 }
 
@@ -121,8 +161,10 @@ impl SearchProvider for Google {
             None => return Ok(None),
         };
 
-        let url =
-            build_google_search_url(&params).map_err(|e| std::io::Error::other(e.to_string()))?;
+        let start = params.start.unwrap_or(0);
+        let async_param = self.ui_async(start);
+        let url = build_google_search_url(&params, &async_param)
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         let mut request = reqwest::Request::new(Method::GET, url);
         let headers = request.headers_mut();
         headers.insert(

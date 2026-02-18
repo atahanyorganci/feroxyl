@@ -775,6 +775,7 @@ dependencies = [
 name = "quick-start"
 version = "0.1.0"
 dependencies = [
+ "rand",
  "reqwest",
  "scraper",
  "serde_urlencoded",
