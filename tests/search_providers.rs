@@ -6,8 +6,8 @@
 //! Run with: `cargo test --test search_providers -- --ignored`
 
 use feroxyl::engine::{
-    bing, brave, ddg, google, run_meta_search, run_provider, startpage, RankedSearchResult,
-    SearchParams, SearchResult, TimeRange,
+    run_meta_search, run_provider, Bing, Brave, DuckDuckGo, Google, RankedSearchResult,
+    SearchParams, SearchResult, Startpage, TimeRange,
 };
 
 fn default_params(query: &str) -> SearchParams {
@@ -46,7 +46,7 @@ fn assert_valid_results(results: &[SearchResult]) {
 #[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
 async fn duckduckgo_search_returns_results() {
     let params = default_params("rust programming");
-    let results = run_provider::<ddg::DuckDuckGo>(&params)
+    let results = run_provider::<DuckDuckGo>(&params)
         .await
         .expect("DuckDuckGo search should succeed");
 
@@ -78,7 +78,7 @@ async fn duckduckgo_search_with_time_range() {
     let mut params = default_params("searxng");
     params.time_range = TimeRange::Week;
 
-    let results = run_provider::<ddg::DuckDuckGo>(&params)
+    let results = run_provider::<DuckDuckGo>(&params)
         .await
         .expect("DuckDuckGo search with time range should succeed");
 
@@ -90,7 +90,7 @@ async fn duckduckgo_search_with_time_range() {
 async fn google_search_returns_results() {
     let params = default_params("rust programming");
 
-    let results = run_provider::<google::Google>(&params)
+    let results = run_provider::<Google>(&params)
         .await
         .expect("Google search should succeed");
 
@@ -102,7 +102,7 @@ async fn google_search_returns_results() {
 async fn brave_search_returns_results() {
     let params = default_params("rust programming");
 
-    let results = run_provider::<brave::Brave>(&params)
+    let results = run_provider::<Brave>(&params)
         .await
         .expect("Brave search should succeed");
 
@@ -114,7 +114,7 @@ async fn brave_search_returns_results() {
 async fn startpage_search_returns_results() {
     let params = default_params("rust programming");
 
-    let results = run_provider::<startpage::Startpage>(&params)
+    let results = run_provider::<Startpage>(&params)
         .await
         .expect("Startpage search should succeed");
 
@@ -126,7 +126,7 @@ async fn startpage_search_returns_results() {
 async fn bing_search_returns_results() {
     let params = default_params("rust programming");
 
-    let results = run_provider::<bing::Bing>(&params)
+    let results = run_provider::<Bing>(&params)
         .await
         .expect("Bing search should succeed");
 
@@ -140,7 +140,7 @@ async fn google_search_with_time_range_and_safesearch() {
     params.time_range = TimeRange::Month;
     params.safesearch = feroxyl::engine::Safesearch::Moderate;
 
-    let results = run_provider::<google::Google>(&params)
+    let results = run_provider::<Google>(&params)
         .await
         .expect("Google search with filters should succeed");
 

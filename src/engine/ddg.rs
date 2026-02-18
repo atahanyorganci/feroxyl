@@ -43,18 +43,10 @@ pub struct DuckDuckGoResult {
     pub content: Option<String>,
 }
 
-/// Optional "instant answer" / zero-click result
-#[derive(Debug, Clone)]
-pub struct ZeroClickAnswer {
-    pub answer: String,
-    pub url: Option<String>,
-}
-
 /// Complete search response
 #[derive(Debug, Clone)]
 pub struct DuckDuckGoResponse {
     pub results: Vec<DuckDuckGoResult>,
-    pub zero_click: Option<ZeroClickAnswer>,
 }
 
 /// Extracts text between `begin` and `end` in `txt`
@@ -161,31 +153,7 @@ pub fn parse_response(html: &str) -> Result<DuckDuckGoResponse, Box<dyn Error>> 
         }
     }
 
-    // Parse zero-click / instant answer
-    let mut zero_click = None;
-    let zero_click_selector = Selector::parse("#zero_click_abstract").unwrap();
-    if let Some(zc_div) = doc.select(&zero_click_selector).next() {
-        let answer = zc_div.text().collect::<String>().trim().to_string();
-
-        // Filter out bot detection messages
-        if !answer.is_empty()
-            && !answer.contains("Your IP address is")
-            && !answer.contains("Your user agent:")
-            && !answer.contains("URL Decoded:")
-        {
-            let url = zc_div
-                .select(&Selector::parse("a").unwrap())
-                .next()
-                .and_then(|a| a.value().attr("href").map(|s| s.to_string()));
-
-            zero_click = Some(ZeroClickAnswer { answer, url });
-        }
-    }
-
-    Ok(DuckDuckGoResponse {
-        results,
-        zero_click,
-    })
+    Ok(DuckDuckGoResponse { results })
 }
 
 /// Phase of the DuckDuckGo state machine.

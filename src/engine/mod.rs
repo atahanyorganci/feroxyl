@@ -6,11 +6,13 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
 
-pub mod bing;
-pub mod brave;
-pub mod ddg;
-pub mod google;
-pub mod startpage;
+mod bing;
+mod brave;
+mod ddg;
+mod google;
+mod startpage;
+
+pub use {bing::Bing, brave::Brave, ddg::DuckDuckGo, google::Google, startpage::Startpage};
 
 /// Unified search result type for all providers
 #[derive(Debug, Clone, serde::Serialize)]
