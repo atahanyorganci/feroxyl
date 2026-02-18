@@ -181,23 +181,6 @@ pub async fn run_provider<P: SearchProvider>(
     }
 }
 
-/// Normalizes a URL for deduplication (SearXNG-style: host + path, case-insensitive).
-fn normalize_url_key(url_str: &str) -> Option<String> {
-    let parsed = reqwest::Url::parse(url_str).ok()?;
-    let host = parsed.host_str()?.to_lowercase();
-    let host = host.strip_prefix("www.").unwrap_or(&host);
-    Some(format!("{}|{}", host, parsed.path()))
-}
-
-/// Merged result entry: (result, engine positions).
-type MergedEntry = (SearchResult, Vec<(&'static str, usize)>);
-
-/// Calculates score from positions (SearXNG results.py: weight=1.0, score = sum(weight/position)).
-fn calculate_score(positions: &[usize]) -> f32 {
-    let weight = positions.len() as f32;
-    positions.iter().map(|&p| weight / (p as f32)).sum()
-}
-
 #[tracing::instrument(skip(params), fields(query = %params.query))]
 pub async fn run_meta_search(
     params: &SearchParams,
@@ -223,60 +206,42 @@ pub async fn run_meta_search(
         "Provider results received"
     );
 
-    let mut merged: HashMap<String, MergedEntry> = HashMap::new();
+    let mut merged: HashMap<String, RankedSearchResult> = HashMap::new();
 
     for (pos, r) in ddg_results.into_iter().enumerate() {
-        let key = normalize_url_key(&r.url).unwrap_or_else(|| r.url.clone());
         let engine_name = ddg::DuckDuckGo::name();
         merged
-            .entry(key)
-            .and_modify(|(existing, positions)| {
-                positions.push((engine_name, pos + 1));
-                if r.content.as_ref().map_or(0, |c| c.len())
-                    > existing.content.as_ref().map_or(0, |c| c.len())
-                {
-                    existing.content = r.content.clone();
-                }
-                if r.title.len() > existing.title.len() {
-                    existing.title = r.title.clone();
-                }
+            .entry(r.url.clone())
+            .and_modify(|existing| {
+                existing.position.push((engine_name, pos + 1));
+                existing.score += 1.0 / ((pos + 1) as f32);
             })
-            .or_insert_with(|| (r, vec![(engine_name, pos + 1)]));
-    }
-
-    for (pos, r) in google_results.into_iter().enumerate() {
-        let key = normalize_url_key(&r.url).unwrap_or_else(|| r.url.clone());
-        let engine_name = google::Google::name();
-        merged
-            .entry(key)
-            .and_modify(|(existing, positions)| {
-                positions.push((engine_name, pos + 1));
-                if r.content.as_ref().map_or(0, |c| c.len())
-                    > existing.content.as_ref().map_or(0, |c| c.len())
-                {
-                    existing.content = r.content.clone();
-                }
-                if r.title.len() > existing.title.len() {
-                    existing.title = r.title.clone();
-                }
-            })
-            .or_insert_with(|| (r, vec![(engine_name, pos + 1)]));
-    }
-
-    let mut ranked: Vec<RankedSearchResult> = merged
-        .into_values()
-        .map(|(r, positions)| {
-            let positions_only: Vec<usize> = positions.iter().map(|(_, p)| *p).collect();
-            RankedSearchResult {
+            .or_insert_with(|| RankedSearchResult {
                 title: r.title,
                 url: r.url,
                 content: r.content,
-                position: positions,
-                score: calculate_score(&positions_only),
-            }
-        })
-        .collect();
+                position: vec![(engine_name, pos + 1)],
+                score: 1.0 / (pos + 1) as f32,
+            });
+    }
 
+    for (pos, r) in google_results.into_iter().enumerate() {
+        merged
+            .entry(r.url.clone())
+            .and_modify(|existing| {
+                existing.position.push((google::Google::name(), pos + 1));
+                existing.score += 1.0 / ((pos + 1) as f32);
+            })
+            .or_insert_with(|| RankedSearchResult {
+                title: r.title,
+                url: r.url,
+                content: r.content,
+                position: vec![(google::Google::name(), pos + 1)],
+                score: 1.0 / (pos + 1) as f32,
+            });
+    }
+
+    let mut ranked: Vec<RankedSearchResult> = merged.into_values().collect();
     ranked.sort_by(|a, b| {
         b.score
             .partial_cmp(&a.score)
@@ -306,36 +271,4 @@ where
 
     /// Yield the next result. None when no more results; caller loops back to build_request.
     fn results(&mut self) -> Option<Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>>>;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_normalize_url_key() {
-        assert_eq!(
-            normalize_url_key("https://example.com/path"),
-            Some("example.com|/path".to_string())
-        );
-        assert_eq!(
-            normalize_url_key("https://www.example.com/path"),
-            Some("example.com|/path".to_string())
-        );
-        assert_eq!(
-            normalize_url_key("http://EXAMPLE.COM/Path"),
-            Some("example.com|/Path".to_string())
-        );
-        assert_eq!(normalize_url_key("not-a-url"), None);
-    }
-
-    #[test]
-    fn test_calculate_score() {
-        // Single engine, position 1: weight=1, score=1/1=1
-        assert!((calculate_score(&[1]) - 1.0).abs() < 1e-6);
-        // Two engines, positions 1 and 2: weight=2, score=2/1+2/2=3
-        assert!((calculate_score(&[1, 2]) - 3.0).abs() < 1e-6);
-        // Two engines, positions 1 and 3: weight=2, score=2/1+2/3≈2.667
-        assert!((calculate_score(&[1, 3]) - 2.666_667).abs() < 1e-5);
-    }
 }
