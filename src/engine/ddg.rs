@@ -306,6 +306,10 @@ impl DuckDuckGo {
 }
 
 impl crate::engine::SearchProvider for DuckDuckGo {
+    fn name() -> &'static str {
+        "ddg"
+    }
+
     fn build_request(
         &mut self,
         params: &SearchParams,

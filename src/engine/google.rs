@@ -206,6 +206,10 @@ impl Google {
 }
 
 impl SearchProvider for Google {
+    fn name() -> &'static str {
+        "google"
+    }
+
     fn build_request(
         &mut self,
         params: &SearchParams,

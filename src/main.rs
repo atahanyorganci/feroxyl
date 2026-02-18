@@ -1,5 +1,5 @@
 use axum::{extract::Query, routing::get, Json, Router};
-use feroxyl::engine::{ddg, run_provider, SearchParams, SearchResult};
+use feroxyl::engine::{run_meta_search, RankedSearchResult, SearchParams};
 use std::error::Error;
 
 #[derive(serde::Deserialize)]
@@ -21,16 +21,14 @@ async fn search(
         time_range,
         locale,
     }): Query<SearchQuery>,
-) -> Json<Vec<SearchResult>> {
+) -> Json<Vec<RankedSearchResult>> {
     let params = SearchParams {
         query,
         safesearch,
         time_range,
         locale,
     };
-    let results = run_provider::<ddg::DuckDuckGo>(&params)
-        .await
-        .unwrap_or_default();
+    let results = run_meta_search(&params).await.unwrap_or_default();
     Json(results)
 }
 

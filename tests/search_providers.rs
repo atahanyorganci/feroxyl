@@ -5,7 +5,10 @@
 //!
 //! Run with: `cargo test --test search_providers -- --ignored`
 
-use feroxyl::engine::{ddg, google, run_provider, SearchParams, SearchResult, TimeRange};
+use feroxyl::engine::{
+    ddg, google, run_meta_search, run_provider, RankedSearchResult, SearchParams, SearchResult,
+    TimeRange,
+};
 
 fn default_params(query: &str) -> SearchParams {
     SearchParams {
@@ -13,6 +16,20 @@ fn default_params(query: &str) -> SearchParams {
         safesearch: feroxyl::engine::Safesearch::default(),
         time_range: TimeRange::default(),
         locale: feroxyl::engine::Locale::default(),
+    }
+}
+
+fn assert_valid_ranked_results(results: &[RankedSearchResult]) {
+    assert!(!results.is_empty(), "expected at least one result");
+    for r in results {
+        assert!(!r.title.is_empty(), "result title should not be empty");
+        assert!(!r.url.is_empty(), "result url should not be empty");
+        assert!(r.url.starts_with("http"), "result url should be absolute");
+        assert!(r.score > 0.0, "result score should be positive");
+        assert!(
+            !r.position.is_empty(),
+            "result should have at least one engine position"
+        );
     }
 }
 
@@ -34,6 +51,25 @@ async fn duckduckgo_search_returns_results() {
         .expect("DuckDuckGo search should succeed");
 
     assert_valid_results(&results);
+}
+
+#[tokio::test]
+#[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
+async fn meta_search_returns_merged_results() {
+    let params = default_params("rust programming");
+
+    let results = run_meta_search(&params)
+        .await
+        .expect("meta search should succeed");
+
+    assert_valid_ranked_results(&results);
+    // Results should be sorted by score descending
+    for w in results.windows(2) {
+        assert!(
+            w[0].score >= w[1].score,
+            "results should be sorted by score"
+        );
+    }
 }
 
 #[tokio::test]
