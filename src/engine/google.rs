@@ -271,12 +271,16 @@ impl SearchProvider for Google {
                 self.results.push(result);
             }
         }
-        Ok(())
+        if self.results.is_empty() {
+            Err("No results found".into())
+        } else {
+            Ok(())
+        }
     }
 
     fn results(&mut self) -> Option<Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>>> {
         if self.results.is_empty() {
-            None
+            Some(Err("No results found".into()))
         } else {
             Some(Ok(std::mem::take(&mut self.results)))
         }
