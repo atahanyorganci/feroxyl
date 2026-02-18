@@ -3,6 +3,8 @@
 //! Port of SearXNG's duckduckgo.py engine.
 //! Uses the HTML API at https://html.duckduckgo.com/html/
 
+use reqwest::header::{HeaderName, HeaderValue};
+use reqwest::Method;
 use scraper::{Html, Selector};
 use std::collections::HashMap;
 use std::error::Error;
@@ -45,6 +47,8 @@ pub struct DuckDuckGoParams {
     pub region: String,
     /// Optional time range filter
     pub time_range: TimeRange,
+    /// Optional VQD token from prior GET to duckduckgo.com - improves bot detection pass rate
+    pub vqd: Option<String>,
 }
 
 impl Default for DuckDuckGoParams {
@@ -54,6 +58,7 @@ impl Default for DuckDuckGoParams {
             page: 1,
             region: "wt-wt".to_string(),
             time_range: TimeRange::Any,
+            vqd: None,
         }
     }
 }
@@ -89,8 +94,8 @@ fn extr(txt: &str, begin: &str, end: &str) -> Option<String> {
 }
 
 /// Fetches the VQD (validation query digest) required for DuckDuckGo's bot protection.
-/// The VQD is needed for pagination (page 2+). First page doesn't require it.
-async fn get_vqd(
+/// Including VQD in page 1 requests can improve success rate against bot detection.
+pub async fn get_vqd(
     client: &reqwest::Client,
     query: &str,
     _region: &str,
@@ -100,6 +105,10 @@ async fn get_vqd(
     let response = client
         .get(&url)
         .header("Accept-Language", "en-US,en;q=0.9")
+        .header(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        )
         .send()
         .await?;
 
@@ -114,10 +123,7 @@ async fn get_vqd(
 }
 
 /// Builds the form data for the DuckDuckGo POST request
-fn build_form_data(
-    params: &DuckDuckGoParams,
-    vqd: Option<&str>,
-) -> Result<HashMap<String, String>, Box<dyn Error>> {
+fn build_form_data(params: &DuckDuckGoParams) -> Result<HashMap<String, String>, Box<dyn Error>> {
     let mut data: HashMap<String, String> = HashMap::new();
 
     data.insert("q".to_string(), params.query.clone());
@@ -132,6 +138,9 @@ fn build_form_data(
 
     if params.page == 1 {
         data.insert("b".to_string(), String::new());
+        if let Some(ref v) = params.vqd {
+            data.insert("vqd".to_string(), v.clone());
+        }
     } else {
         // Page 2 = offset 10, Page 3+ = 10 + (page - 2) * 15
         let offset = 10 + (params.page.saturating_sub(2)) * 15;
@@ -139,10 +148,9 @@ fn build_form_data(
         data.insert("nextParams".to_string(), String::new());
         data.insert("dc".to_string(), (offset + 1).to_string());
 
-        if let Some(v) = vqd {
-            data.insert("vqd".to_string(), v.to_string());
+        if let Some(ref v) = params.vqd {
+            data.insert("vqd".to_string(), v.clone());
         } else {
-            // Cannot request page 2+ without VQD - DDG will block the IP
             return Err("VQD required for pagination but could not be obtained".into());
         }
     }
@@ -160,11 +168,13 @@ pub async fn search(
         return Err("Query too long (max 499 characters)".into());
     }
 
-    // For page 2+, we need VQD
-    let vqd = if params.page >= 2 {
-        get_vqd(client, &params.query, &params.region).await?
+    // For page 2+, we need VQD if not in params
+    let params = if params.page >= 2 && params.vqd.is_none() {
+        let mut p = params;
+        p.vqd = get_vqd(client, &p.query, &p.region).await?;
+        p
     } else {
-        None
+        params
     };
 
     // Some locales (e.g. China) don't support "next page"
@@ -175,7 +185,7 @@ pub async fn search(
         });
     }
 
-    let form_data = build_form_data(&params, vqd.as_deref())?;
+    let form_data = build_form_data(&params)?;
 
     let response = client
         .post(BASE_URL)
@@ -280,6 +290,109 @@ pub fn parse_response(html: &str) -> Result<DuckDuckGoResponse, Box<dyn Error>> 
         results,
         zero_click,
     })
+}
+
+/// Unit struct implementing SearchProvider for DuckDuckGo.
+/// Only page 1 is supported (page 2+ requires VQD from a prior async fetch).
+pub struct DuckDuckGo;
+
+impl crate::engine::SearchProvider for DuckDuckGo {
+    type Params = DuckDuckGoParams;
+
+    fn build_request(
+        &self,
+        params: Self::Params,
+    ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
+        if params.query.len() >= 500 {
+            return Err("Query too long (max 499 characters)".into());
+        }
+        if params.page >= 2 {
+            return Err(
+                "DuckDuckGo page 2+ requires VQD; use page 1 only with SearchProvider".into(),
+            );
+        }
+
+        let form_data =
+            build_form_data(&params).map_err(|e| std::io::Error::other(e.to_string()))?;
+
+        // Use serde_urlencoded to match reqwest's form() encoding exactly
+        let body = serde_urlencoded::to_string(&form_data)
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+
+        let url =
+            reqwest::Url::parse(BASE_URL).map_err(|e| std::io::Error::other(e.to_string()))?;
+        let mut request = reqwest::Request::new(Method::POST, url);
+        let headers = request.headers_mut();
+        headers.insert(
+            HeaderName::from_static("content-type"),
+            HeaderValue::from_static("application/x-www-form-urlencoded"),
+        );
+        headers.insert(
+            HeaderName::from_static("referer"),
+            HeaderValue::from_static(BASE_URL),
+        );
+        headers.insert(
+            HeaderName::from_static("sec-fetch-dest"),
+            HeaderValue::from_static("document"),
+        );
+        headers.insert(
+            HeaderName::from_static("sec-fetch-mode"),
+            HeaderValue::from_static("navigate"),
+        );
+        headers.insert(
+            HeaderName::from_static("sec-fetch-site"),
+            HeaderValue::from_static("same-origin"),
+        );
+        headers.insert(
+            HeaderName::from_static("sec-fetch-user"),
+            HeaderValue::from_static("?1"),
+        );
+        headers.insert(
+            HeaderName::from_static("accept-language"),
+            HeaderValue::from_static("en-US,en;q=0.9"),
+        );
+        headers.insert(
+            HeaderName::from_static("user-agent"),
+            HeaderValue::from_static(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            ),
+        );
+        // DDG uses kl cookie for region; required for proper results
+        let cookie_value = format!("kl={}", params.region);
+        headers.insert(
+            HeaderName::from_static("cookie"),
+            HeaderValue::try_from(cookie_value)
+                .map_err(|e| std::io::Error::other(e.to_string()))?,
+        );
+        *request.body_mut() = Some(reqwest::Body::from(body));
+
+        Ok(request)
+    }
+
+    fn parse_response(
+        &self,
+        body: &str,
+    ) -> Result<Vec<crate::engine::SearchResult>, Box<dyn Error + Send + Sync>> {
+        match parse_response(body) {
+            Ok(response) => {
+                let results = response
+                    .results
+                    .into_iter()
+                    .map(|r| crate::engine::SearchResult {
+                        title: r.title,
+                        url: r.url,
+                        content: r.content,
+                    })
+                    .collect();
+                Ok(results)
+            }
+            Err(e) if e.to_string().contains("CAPTCHA") => {
+                // DDG blocked with CAPTCHA; return empty results instead of failing
+                Ok(Vec::new())
+            }
+            Err(e) => Err(std::io::Error::other(e.to_string()).into()),
+        }
+    }
 }
 
 #[cfg(test)]

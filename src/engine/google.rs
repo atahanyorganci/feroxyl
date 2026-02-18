@@ -1,6 +1,8 @@
 //! Google search engine
 
 use core::fmt;
+use reqwest::header::{HeaderName, HeaderValue};
+use reqwest::Method;
 use reqwest::Url;
 use scraper::{ElementRef, Html, Selector};
 use std::error::Error;
@@ -152,4 +154,78 @@ pub fn parse_response(html: &str) -> Vec<Result<GoogleResult, Box<dyn Error>>> {
         .select(&selector)
         .map(parse_google_result)
         .collect()
+}
+
+/// Unit struct implementing SearchProvider for Google
+pub struct Google;
+
+impl crate::engine::SearchProvider for Google {
+    type Params = GoogleRequestParams;
+
+    fn build_request(
+        &self,
+        params: Self::Params,
+    ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
+        let url =
+            build_google_search_url(&params).map_err(|e| std::io::Error::other(e.to_string()))?;
+        let mut request = reqwest::Request::new(Method::GET, url);
+        let headers = request.headers_mut();
+        headers.insert(
+            HeaderName::from_static("accept"),
+            HeaderValue::from_static("*/*"),
+        );
+        headers.insert(
+            HeaderName::from_static("sec-fetch-dest"),
+            HeaderValue::from_static("empty"),
+        );
+        headers.insert(
+            HeaderName::from_static("sec-fetch-mode"),
+            HeaderValue::from_static("cors"),
+        );
+        headers.insert(
+            HeaderName::from_static("sec-fetch-site"),
+            HeaderValue::from_static("same-origin"),
+        );
+        headers.insert(
+            HeaderName::from_static("sec-fetch-user"),
+            HeaderValue::from_static("?1"),
+        );
+        headers.insert(
+            HeaderName::from_static("sec-gpc"),
+            HeaderValue::from_static("1"),
+        );
+        headers.insert(
+            HeaderName::from_static("user-agent"),
+            HeaderValue::from_static(
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/399.2.845414227 Mobile/15E148 Safari/604.1",
+            ),
+        );
+        headers.insert(
+            HeaderName::from_static("cookie"),
+            HeaderValue::from_static("CONSENT=YES+"),
+        );
+        Ok(request)
+    }
+
+    fn parse_response(
+        &self,
+        body: &str,
+    ) -> Result<Vec<crate::engine::SearchResult>, Box<dyn Error + Send + Sync>> {
+        let mut html = body.to_string();
+        let start_index = html.find("<div").ok_or("No <div> found")?;
+        html = html[start_index..].to_string();
+        let end_index = html.rfind("</div>").ok_or("No </div> found")?;
+        html = html[..end_index].to_string();
+
+        let results = parse_response(&html)
+            .into_iter()
+            .filter_map(|r| r.ok())
+            .map(|r| crate::engine::SearchResult {
+                title: r.title,
+                url: r.url,
+                content: r.content,
+            })
+            .collect();
+        Ok(results)
+    }
 }
