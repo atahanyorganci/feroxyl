@@ -248,11 +248,9 @@ impl DuckDuckGo {
     fn build_vqd_request(
         params: &DuckDuckGoParams,
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
-        let url = format!(
-            "{}?q={}",
-            DDG_SEARCH_URL,
-            urlencoding::encode(&params.query)
-        );
+        let query_string = serde_urlencoded::to_string(&[("q", params.query.as_str())])
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        let url = format!("{}?{}", DDG_SEARCH_URL, query_string);
         let url = reqwest::Url::parse(&url).map_err(|e| std::io::Error::other(e.to_string()))?;
         let mut request = reqwest::Request::new(Method::GET, url);
         let headers = request.headers_mut();
