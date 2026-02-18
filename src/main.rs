@@ -1,25 +1,40 @@
-use axum::{extract::Query, routing::get, Json, Router};
-use feroxyl::engine::{ddg, run_provider, SearchParams};
+use axum::{
+    extract::{Query, State},
+    routing::get,
+    Json, Router,
+};
+use feroxyl::engine::{ddg, run_provider, SearchParams, SearchResult};
 use std::error::Error;
 
 #[derive(serde::Deserialize)]
 struct SearchQuery {
     #[serde(rename = "q")]
     query: String,
+    #[serde(default)]
+    safesearch: feroxyl::engine::Safesearch,
+    #[serde(default)]
+    time_range: feroxyl::engine::TimeRange,
+    #[serde(default)]
+    locale: feroxyl::engine::Locale,
 }
 
 async fn search(
-    Query(SearchQuery { query }): Query<SearchQuery>,
-    axum::extract::State(client): axum::extract::State<reqwest::Client>,
-) -> Json<Vec<feroxyl::engine::SearchResult>> {
+    Query(SearchQuery {
+        query,
+        safesearch,
+        time_range,
+        locale,
+    }): Query<SearchQuery>,
+    State(client): State<reqwest::Client>,
+) -> Json<Vec<SearchResult>> {
     let results = run_provider(
         &mut ddg::DuckDuckGo::new(),
         &client,
         SearchParams {
             query,
-            safesearch: feroxyl::engine::Safesearch::default(),
-            time_range: feroxyl::engine::TimeRange::default(),
-            locale: feroxyl::engine::Locale::default(),
+            safesearch,
+            time_range,
+            locale,
         },
     )
     .await

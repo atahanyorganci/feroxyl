@@ -17,7 +17,8 @@ pub struct SearchResult {
 
 /// Time range filter for search results (SearXNG: time_range).
 /// Maps to engine-specific codes (e.g. DDG: d/w/m/y, Google: qdr:d/w/m/y).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TimeRange {
     #[default]
     Any,
@@ -29,7 +30,8 @@ pub enum TimeRange {
 
 /// Safe search filter level (SearXNG: safesearch 0/1/2).
 /// 0: off, 1: moderate, 2: strict.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Safesearch {
     #[default]
     Off,
@@ -37,20 +39,10 @@ pub enum Safesearch {
     Strict,
 }
 
-impl Safesearch {
-    /// From numeric level (0, 1, 2)
-    pub fn from_level(level: u8) -> Self {
-        match level {
-            1 => Safesearch::Moderate,
-            2 => Safesearch::Strict,
-            _ => Safesearch::Off,
-        }
-    }
-}
-
 /// Locale/language for search results (BCP 47 style).
 /// Mirrors SearXNG's searxng_locale.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub enum Locale {
     /// No language/region filter (all locales).
     #[default]
@@ -96,6 +88,31 @@ impl std::str::FromStr for Locale {
             "tr-TR" | "tr_TR" => Locale::TrTR,
             other => Locale::Other(other.to_string()),
         })
+    }
+}
+
+/// Error when parsing an invalid locale string.
+#[derive(Debug, thiserror::Error)]
+#[error("invalid locale: {0}")]
+pub struct InvalidLocale(pub String);
+
+impl TryFrom<String> for Locale {
+    type Error = InvalidLocale;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        match s.as_str() {
+            "all" => Ok(Locale::All),
+            "en-US" | "en_us" => Ok(Locale::EnUS),
+            "en-GB" | "en_GB" | "en-UK" | "en_UK" => Ok(Locale::EnGB),
+            "tr-TR" | "tr_TR" => Ok(Locale::TrTR),
+            other => Err(InvalidLocale(other.to_string())),
+        }
+    }
+}
+
+impl From<Locale> for String {
+    fn from(locale: Locale) -> Self {
+        locale.as_str().to_string()
     }
 }
 
