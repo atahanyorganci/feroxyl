@@ -6,9 +6,11 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
 
+pub mod bing;
 pub mod brave;
 pub mod ddg;
 pub mod google;
+pub mod startpage;
 
 /// Unified search result type for all providers
 #[derive(Debug, Clone, serde::Serialize)]

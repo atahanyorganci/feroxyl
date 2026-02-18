@@ -355,10 +355,12 @@ name = "feroxyl"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base64",
  "rand",
  "reqwest",
  "scraper",
  "serde",
+ "serde_json",
  "serde_urlencoded",
  "thiserror",
  "tokio",

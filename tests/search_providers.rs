@@ -6,8 +6,8 @@
 //! Run with: `cargo test --test search_providers -- --ignored`
 
 use feroxyl::engine::{
-    brave, ddg, google, run_meta_search, run_provider, RankedSearchResult, SearchParams,
-    SearchResult, TimeRange,
+    bing, brave, ddg, google, run_meta_search, run_provider, startpage, RankedSearchResult,
+    SearchParams, SearchResult, TimeRange,
 };
 
 fn default_params(query: &str) -> SearchParams {
@@ -105,6 +105,30 @@ async fn brave_search_returns_results() {
     let results = run_provider::<brave::Brave>(&params)
         .await
         .expect("Brave search should succeed");
+
+    assert_valid_results(&results);
+}
+
+#[tokio::test]
+#[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
+async fn startpage_search_returns_results() {
+    let params = default_params("rust programming");
+
+    let results = run_provider::<startpage::Startpage>(&params)
+        .await
+        .expect("Startpage search should succeed");
+
+    assert_valid_results(&results);
+}
+
+#[tokio::test]
+#[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
+async fn bing_search_returns_results() {
+    let params = default_params("rust programming");
+
+    let results = run_provider::<bing::Bing>(&params)
+        .await
+        .expect("Bing search should succeed");
 
     assert_valid_results(&results);
 }
