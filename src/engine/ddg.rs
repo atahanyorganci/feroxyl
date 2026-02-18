@@ -6,7 +6,7 @@
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::Method;
 use scraper::{Html, Selector};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 
 const BASE_URL: &str = "https://html.duckduckgo.com/html/";
@@ -93,35 +93,6 @@ fn extr(txt: &str, begin: &str, end: &str) -> Option<String> {
     Some(txt[after_begin..after_begin + end_idx].to_string())
 }
 
-/// Fetches the VQD (validation query digest) required for DuckDuckGo's bot protection.
-/// Including VQD in page 1 requests can improve success rate against bot detection.
-pub async fn get_vqd(
-    client: &reqwest::Client,
-    query: &str,
-    _region: &str,
-) -> Result<Option<String>, Box<dyn Error>> {
-    let url = format!("{}?q={}", DDG_SEARCH_URL, urlencoding::encode(query));
-
-    let response = client
-        .get(&url)
-        .header("Accept-Language", "en-US,en;q=0.9")
-        .header(
-            "User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        )
-        .send()
-        .await?;
-
-    if !response.status().is_success() {
-        return Ok(None);
-    }
-
-    let text = response.text().await?;
-    let vqd = extr(&text, "vqd=\"", "\"");
-
-    Ok(vqd)
-}
-
 /// Builds the form data for the DuckDuckGo POST request
 fn build_form_data(params: &DuckDuckGoParams) -> Result<HashMap<String, String>, Box<dyn Error>> {
     let mut data: HashMap<String, String> = HashMap::new();
@@ -156,60 +127,6 @@ fn build_form_data(params: &DuckDuckGoParams) -> Result<HashMap<String, String>,
     }
 
     Ok(data)
-}
-
-/// Sends a search request to DuckDuckGo
-pub async fn search(
-    client: &reqwest::Client,
-    params: DuckDuckGoParams,
-) -> Result<DuckDuckGoResponse, Box<dyn Error>> {
-    // DDG does not accept queries with more than 499 chars
-    if params.query.len() >= 500 {
-        return Err("Query too long (max 499 characters)".into());
-    }
-
-    // For page 2+, we need VQD if not in params
-    let params = if params.page >= 2 && params.vqd.is_none() {
-        let mut p = params;
-        p.vqd = get_vqd(client, &p.query, &p.region).await?;
-        p
-    } else {
-        params
-    };
-
-    // Some locales (e.g. China) don't support "next page"
-    if params.page >= 2 && params.region.starts_with("zh") {
-        return Ok(DuckDuckGoResponse {
-            results: vec![],
-            zero_click: None,
-        });
-    }
-
-    let form_data = build_form_data(&params)?;
-
-    let response = client
-        .post(BASE_URL)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .header("Referer", BASE_URL)
-        .header("Sec-Fetch-Dest", "document")
-        .header("Sec-Fetch-Mode", "navigate")
-        .header("Sec-Fetch-Site", "same-origin")
-        .header("Sec-Fetch-User", "?1")
-        .header("Accept-Language", "en-US,en;q=0.9")
-        .form(&form_data)
-        .send()
-        .await?;
-
-    // 303 redirect might indicate an issue
-    if response.status().as_u16() == 303 {
-        return Ok(DuckDuckGoResponse {
-            results: vec![],
-            zero_click: None,
-        });
-    }
-
-    let html = response.text().await?;
-    parse_response(&html)
 }
 
 /// Checks if the response contains a CAPTCHA challenge
@@ -292,30 +209,75 @@ pub fn parse_response(html: &str) -> Result<DuckDuckGoResponse, Box<dyn Error>> 
     })
 }
 
-/// Unit struct implementing SearchProvider for DuckDuckGo.
-/// Only page 1 is supported (page 2+ requires VQD from a prior async fetch).
-pub struct DuckDuckGo;
+/// Phase of the DuckDuckGo state machine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DdgPhase {
+    /// Need to fetch VQD token (GET to duckduckgo.com)
+    NeedVqd,
+    /// Ready to search (POST to html.duckduckgo.com)
+    NeedSearch,
+    /// No more requests
+    Done,
+}
 
-impl crate::engine::SearchProvider for DuckDuckGo {
-    type Params = DuckDuckGoParams;
+/// Stateful DuckDuckGo search provider implementing SearchProvider.
+#[derive(Debug)]
+pub struct DuckDuckGo {
+    params: Option<DuckDuckGoParams>,
+    phase: DdgPhase,
+    vqd: Option<String>,
+    result_queue: VecDeque<crate::engine::SearchResult>,
+}
 
-    fn build_request(
-        &self,
-        params: Self::Params,
+impl Default for DuckDuckGo {
+    fn default() -> Self {
+        Self {
+            params: None,
+            phase: DdgPhase::NeedVqd,
+            vqd: None,
+            result_queue: VecDeque::new(),
+        }
+    }
+}
+
+impl DuckDuckGo {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn build_vqd_request(
+        params: &DuckDuckGoParams,
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
-        if params.query.len() >= 500 {
-            return Err("Query too long (max 499 characters)".into());
-        }
-        if params.page >= 2 {
-            return Err(
-                "DuckDuckGo page 2+ requires VQD; use page 1 only with SearchProvider".into(),
-            );
-        }
+        let url = format!(
+            "{}?q={}",
+            DDG_SEARCH_URL,
+            urlencoding::encode(&params.query)
+        );
+        let url = reqwest::Url::parse(&url).map_err(|e| std::io::Error::other(e.to_string()))?;
+        let mut request = reqwest::Request::new(Method::GET, url);
+        let headers = request.headers_mut();
+        headers.insert(
+            HeaderName::from_static("accept-language"),
+            HeaderValue::from_static("en-US,en;q=0.9"),
+        );
+        headers.insert(
+            HeaderName::from_static("user-agent"),
+            HeaderValue::from_static(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            ),
+        );
+        Ok(request)
+    }
+
+    fn build_search_request(
+        &self,
+        params: &DuckDuckGoParams,
+    ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
+        let mut params = params.clone();
+        params.vqd = self.vqd.clone();
 
         let form_data =
             build_form_data(&params).map_err(|e| std::io::Error::other(e.to_string()))?;
-
-        // Use serde_urlencoded to match reqwest's form() encoding exactly
         let body = serde_urlencoded::to_string(&form_data)
             .map_err(|e| std::io::Error::other(e.to_string()))?;
 
@@ -357,7 +319,6 @@ impl crate::engine::SearchProvider for DuckDuckGo {
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             ),
         );
-        // DDG uses kl cookie for region; required for proper results
         let cookie_value = format!("kl={}", params.region);
         headers.insert(
             HeaderName::from_static("cookie"),
@@ -368,30 +329,77 @@ impl crate::engine::SearchProvider for DuckDuckGo {
 
         Ok(request)
     }
+}
 
-    fn parse_response(
-        &self,
-        body: &str,
-    ) -> Result<Vec<crate::engine::SearchResult>, Box<dyn Error + Send + Sync>> {
+impl crate::engine::SearchProvider for DuckDuckGo {
+    type Params = DuckDuckGoParams;
+
+    fn build_request(
+        &mut self,
+        params: Option<Self::Params>,
+    ) -> Result<Option<reqwest::Request>, Box<dyn Error + Send + Sync>> {
+        let params = params.or_else(|| self.params.clone());
+        let params = match params {
+            Some(p) => p,
+            None => return Ok(None),
+        };
+
+        if params.query.len() >= 500 {
+            return Err("Query too long (max 499 characters)".into());
+        }
+
+        if self.params.is_none() {
+            self.params = Some(params.clone());
+        }
+
+        match self.phase {
+            DdgPhase::NeedVqd => {
+                if params.vqd.is_some() {
+                    self.vqd = params.vqd.clone();
+                    self.phase = DdgPhase::NeedSearch;
+                    let req = self.build_search_request(&params)?;
+                    Ok(Some(req))
+                } else {
+                    let req = Self::build_vqd_request(&params)?;
+                    Ok(Some(req))
+                }
+            }
+            DdgPhase::NeedSearch => {
+                let req = self.build_search_request(&params)?;
+                self.phase = DdgPhase::Done;
+                Ok(Some(req))
+            }
+            DdgPhase::Done => Ok(None),
+        }
+    }
+
+    fn parse_response(&mut self, body: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+        if self.phase == DdgPhase::NeedVqd {
+            self.vqd = extr(body, "vqd=\"", "\"");
+            self.phase = DdgPhase::NeedSearch;
+            return Ok(());
+        }
+
         match parse_response(body) {
             Ok(response) => {
-                let results = response
-                    .results
-                    .into_iter()
-                    .map(|r| crate::engine::SearchResult {
+                for r in response.results {
+                    self.result_queue.push_back(crate::engine::SearchResult {
                         title: r.title,
                         url: r.url,
                         content: r.content,
-                    })
-                    .collect();
-                Ok(results)
+                    });
+                }
+                Ok(())
             }
-            Err(e) if e.to_string().contains("CAPTCHA") => {
-                // DDG blocked with CAPTCHA; return empty results instead of failing
-                Ok(Vec::new())
-            }
+            Err(e) if e.to_string().contains("CAPTCHA") => Ok(()),
             Err(e) => Err(std::io::Error::other(e.to_string()).into()),
         }
+    }
+
+    fn results(
+        &mut self,
+    ) -> Option<Result<crate::engine::SearchResult, Box<dyn Error + Send + Sync>>> {
+        self.result_queue.pop_front().map(Ok)
     }
 }
 

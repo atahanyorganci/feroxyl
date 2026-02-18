@@ -1,14 +1,16 @@
 //! Google search engine
 
-use core::fmt;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::Method;
 use reqwest::Url;
 use scraper::{ElementRef, Html, Selector};
+use std::collections::VecDeque;
 use std::error::Error;
 
+use crate::engine::{SearchProvider, SearchResult};
+
 /// Parameters for a Google search request
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GoogleRequestParams {
     pub query: String,
     pub start: Option<u32>,
@@ -31,40 +33,6 @@ fn build_google_search_url(params: &GoogleRequestParams) -> Result<Url, Box<dyn 
             "arc_id:srp_OYU6IpFlzDNEiO26LbU1F7p_100,use_ac:true,_fmt:prog",
         );
     Ok(url)
-}
-
-/// Sends a search request to Google and returns the HTML fragment
-pub async fn search(
-    client: &reqwest::Client,
-    params: GoogleRequestParams,
-) -> Result<String, Box<dyn Error>> {
-    let url = build_google_search_url(&params)?;
-
-    let response = client
-        .get(url)
-        .header("Accept", "*/*")
-        .header("Sec-Fetch-Dest", "empty")
-        .header("Sec-Fetch-Mode", "cors")
-        .header("Sec-Fetch-Site", "same-origin")
-        .header("Sec-Fetch-User", "?1")
-        .header("Sec-GPC", "1")
-        .header(
-            "User-Agent",
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/399.2.845414227 Mobile/15E148 Safari/604.1",
-        )
-        .header("Cookie", "CONSENT=YES+")
-        .send()
-        .await?;
-
-    let mut html = response.text().await?;
-
-    let start_index = html.find("<div").ok_or("No <div> found")?;
-    html = html[start_index..].to_string();
-
-    let end_index = html.rfind("</div>").ok_or("No </div> found")?;
-    html = html[..end_index].to_string();
-
-    Ok(html)
 }
 
 fn extract_title(element: ElementRef) -> Result<String, Box<dyn Error>> {
@@ -117,29 +85,11 @@ fn extract_url(root: ElementRef) -> Result<String, Box<dyn Error>> {
     }
 }
 
-/// A single search result from Google
-#[derive(Debug, Clone)]
-pub struct GoogleResult {
-    pub title: String,
-    pub url: String,
-    pub content: Option<String>,
-}
-
-impl fmt::Display for GoogleResult {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Result {{ title: {}, url: {}", self.title, self.url)?;
-        if let Some(content) = &self.content {
-            write!(f, ", content: {}", content)?;
-        }
-        write!(f, " }}")
-    }
-}
-
-fn parse_google_result(element: ElementRef) -> Result<GoogleResult, Box<dyn Error>> {
+fn parse_google_result(element: ElementRef) -> Result<SearchResult, Box<dyn Error>> {
     let title = extract_title(element)?;
     let url = extract_url(element)?;
     let content = extract_content(element);
-    Ok(GoogleResult {
+    Ok(SearchResult {
         title,
         url,
         content,
@@ -147,7 +97,7 @@ fn parse_google_result(element: ElementRef) -> Result<GoogleResult, Box<dyn Erro
 }
 
 /// Parses Google search HTML and returns results
-pub fn parse_response(html: &str) -> Vec<Result<GoogleResult, Box<dyn Error>>> {
+fn parse_response(html: &str) -> Vec<Result<SearchResult, Box<dyn Error>>> {
     let document = Html::parse_fragment(html);
     let selector = Selector::parse("div.MjjYud").unwrap();
     document
@@ -156,16 +106,40 @@ pub fn parse_response(html: &str) -> Vec<Result<GoogleResult, Box<dyn Error>>> {
         .collect()
 }
 
-/// Unit struct implementing SearchProvider for Google
-pub struct Google;
+/// Stateful Google search provider implementing SearchProvider.
+#[derive(Debug, Default)]
+pub struct Google {
+    params: Option<GoogleRequestParams>,
+    result_queue: VecDeque<SearchResult>,
+    request_sent: bool,
+}
 
-impl crate::engine::SearchProvider for Google {
+impl Google {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl SearchProvider for Google {
     type Params = GoogleRequestParams;
 
     fn build_request(
-        &self,
-        params: Self::Params,
-    ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
+        &mut self,
+        params: Option<Self::Params>,
+    ) -> Result<Option<reqwest::Request>, Box<dyn Error + Send + Sync>> {
+        if self.request_sent {
+            return Ok(None);
+        }
+
+        let params = params.or_else(|| self.params.clone());
+        let params = match params {
+            Some(p) => p,
+            None => return Ok(None),
+        };
+
+        self.params = Some(params.clone());
+        self.request_sent = true;
+
         let url =
             build_google_search_url(&params).map_err(|e| std::io::Error::other(e.to_string()))?;
         let mut request = reqwest::Request::new(Method::GET, url);
@@ -204,28 +178,25 @@ impl crate::engine::SearchProvider for Google {
             HeaderName::from_static("cookie"),
             HeaderValue::from_static("CONSENT=YES+"),
         );
-        Ok(request)
+        Ok(Some(request))
     }
 
-    fn parse_response(
-        &self,
-        body: &str,
-    ) -> Result<Vec<crate::engine::SearchResult>, Box<dyn Error + Send + Sync>> {
+    fn parse_response(&mut self, body: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
         let mut html = body.to_string();
         let start_index = html.find("<div").ok_or("No <div> found")?;
         html = html[start_index..].to_string();
         let end_index = html.rfind("</div>").ok_or("No </div> found")?;
         html = html[..end_index].to_string();
 
-        let results = parse_response(&html)
-            .into_iter()
-            .filter_map(|r| r.ok())
-            .map(|r| crate::engine::SearchResult {
-                title: r.title,
-                url: r.url,
-                content: r.content,
-            })
-            .collect();
-        Ok(results)
+        for r in parse_response(&html).into_iter().filter_map(|r| r.ok()) {
+            self.result_queue.push_back(r);
+        }
+        Ok(())
+    }
+
+    fn results(
+        &mut self,
+    ) -> Option<Result<crate::engine::SearchResult, Box<dyn Error + Send + Sync>>> {
+        self.result_queue.pop_front().map(Ok)
     }
 }
