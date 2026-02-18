@@ -48,9 +48,60 @@ impl Safesearch {
     }
 }
 
+/// Locale/language for search results (BCP 47 style).
+/// Mirrors SearXNG's searxng_locale.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum Locale {
+    /// No language/region filter (all locales).
+    #[default]
+    All,
+    /// English (United States)
+    EnUS,
+    /// English (United Kingdom)
+    EnGB,
+    /// Turkish (Turkey)
+    TrTR,
+    /// Custom locale tag (e.g. "de-DE", "fr-FR").
+    Other(String),
+}
+
+impl Locale {
+    /// BCP 47 tag for this locale (e.g. "en-US", "tr-TR").
+    /// Returns "all" for `All`.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Locale::All => "all",
+            Locale::EnUS => "en-US",
+            Locale::EnGB => "en-GB",
+            Locale::TrTR => "tr-TR",
+            Locale::Other(s) => s.as_str(),
+        }
+    }
+}
+
+impl std::fmt::Display for Locale {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl std::str::FromStr for Locale {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "" | "all" => Locale::All,
+            "en-US" | "en_us" => Locale::EnUS,
+            "en-GB" | "en_GB" | "en-UK" | "en_UK" => Locale::EnGB,
+            "tr-TR" | "tr_TR" => Locale::TrTR,
+            other => Locale::Other(other.to_string()),
+        })
+    }
+}
+
 /// Common search parameters shared by all providers.
 /// Mirrors SearXNG's RequestParams: query, safesearch, time_range, searxng_locale.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct SearchParams {
     /// Search query string
     pub query: String,
@@ -58,19 +109,8 @@ pub struct SearchParams {
     pub safesearch: Safesearch,
     /// Optional time range filter
     pub time_range: TimeRange,
-    /// Locale/language (e.g. "all", "en", "en-US"). "all" = no language/region filter.
-    pub locale: String,
-}
-
-impl Default for SearchParams {
-    fn default() -> Self {
-        Self {
-            query: String::new(),
-            safesearch: Safesearch::default(),
-            time_range: TimeRange::default(),
-            locale: "all".to_string(),
-        }
-    }
+    /// Locale/language for search results.
+    pub locale: Locale,
 }
 
 /// Runs a search provider until completion, executing HTTP requests with the given client.

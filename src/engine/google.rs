@@ -35,6 +35,37 @@ fn safesearch_to_google(s: crate::engine::Safesearch) -> &'static str {
     }
 }
 
+/// Google hl (interface language) param.
+fn locale_to_google_hl(locale: &crate::engine::Locale) -> &str {
+    match locale {
+        crate::engine::Locale::All | crate::engine::Locale::EnUS => "en-US",
+        crate::engine::Locale::EnGB => "en-GB",
+        crate::engine::Locale::TrTR => "tr",
+        crate::engine::Locale::Other(s) => s.as_str(),
+    }
+}
+
+/// Google lr (language restriction) param, e.g. "lang_en".
+fn locale_to_google_lr(locale: &crate::engine::Locale) -> Option<&'static str> {
+    match locale {
+        crate::engine::Locale::All => None,
+        crate::engine::Locale::EnUS | crate::engine::Locale::EnGB => Some("lang_en"),
+        crate::engine::Locale::TrTR => Some("lang_tr"),
+        crate::engine::Locale::Other(_) => None,
+    }
+}
+
+/// Google cr (country restriction) param, e.g. "countryUS".
+fn locale_to_google_cr(locale: &crate::engine::Locale) -> Option<&'static str> {
+    match locale {
+        crate::engine::Locale::All => None,
+        crate::engine::Locale::EnUS => Some("countryUS"),
+        crate::engine::Locale::EnGB => Some("countryGB"),
+        crate::engine::Locale::TrTR => Some("countryTR"),
+        crate::engine::Locale::Other(_) => None,
+    }
+}
+
 fn build_google_search_url(
     params: &SearchParams,
     async_param: &str,
@@ -45,9 +76,14 @@ fn build_google_search_url(
         let mut pairs = url.query_pairs_mut();
         pairs
             .append_pair("q", &params.query)
-            .append_pair("hl", "en-US")
-            .append_pair("lr", "lang_en")
-            .append_pair("cr", "countryUS")
+            .append_pair("hl", locale_to_google_hl(&params.locale));
+        if let Some(lr) = locale_to_google_lr(&params.locale) {
+            pairs.append_pair("lr", lr);
+        }
+        if let Some(cr) = locale_to_google_cr(&params.locale) {
+            pairs.append_pair("cr", cr);
+        }
+        pairs
             .append_pair("ie", "utf8")
             .append_pair("oe", "utf8")
             .append_pair("filter", "0")

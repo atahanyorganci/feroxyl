@@ -12,7 +12,7 @@ fn default_params(query: &str) -> SearchParams {
         query: query.to_string(),
         safesearch: feroxyl::engine::Safesearch::default(),
         time_range: TimeRange::default(),
-        locale: "all".to_string(),
+        locale: feroxyl::engine::Locale::default(),
     }
 }
 

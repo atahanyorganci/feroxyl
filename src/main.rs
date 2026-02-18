@@ -18,7 +18,7 @@ async fn search(
             query: query.q,
             safesearch: feroxyl::engine::Safesearch::default(),
             time_range: feroxyl::engine::TimeRange::default(),
-            locale: "all".to_string(),
+            locale: feroxyl::engine::Locale::default(),
         },
     )
     .await

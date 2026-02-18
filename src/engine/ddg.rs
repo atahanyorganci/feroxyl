@@ -9,18 +9,19 @@ use scraper::{Html, Selector};
 use std::collections::HashMap;
 use std::error::Error;
 
-use crate::engine::{SearchParams, TimeRange};
+use crate::engine::{Locale, SearchParams, TimeRange};
 
 const BASE_URL: &str = "https://html.duckduckgo.com/html/";
 const DDG_SEARCH_URL: &str = "https://duckduckgo.com/";
 
-/// DuckDuckGo region code from SearchParams locale.
-/// "all" -> "wt-wt"; otherwise locale lowercased with hyphens (e.g. "en-US" -> "en-us").
-fn locale_to_region(locale: &str) -> String {
-    if locale.eq_ignore_ascii_case("all") || locale.is_empty() {
-        "wt-wt".to_string()
-    } else {
-        locale.to_lowercase().replace('_', "-")
+/// DuckDuckGo region code from Locale: All -> "wt-wt"; otherwise lowercased with hyphens.
+fn locale_to_ddg_region(locale: &Locale) -> String {
+    match locale {
+        Locale::All => "wt-wt".to_string(),
+        Locale::EnUS => "en-us".to_string(),
+        Locale::EnGB => "en-gb".to_string(),
+        Locale::TrTR => "tr-tr".to_string(),
+        Locale::Other(s) => s.to_lowercase().replace('_', "-"),
     }
 }
 
@@ -248,7 +249,7 @@ impl DuckDuckGo {
         &self,
         params: &SearchParams,
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
-        let region = locale_to_region(&params.locale);
+        let region = locale_to_ddg_region(&params.locale);
         let form_data = build_form_data(
             &params.query,
             1,
@@ -402,10 +403,15 @@ mod tests {
     }
 
     #[test]
-    fn test_locale_to_region() {
-        assert_eq!(locale_to_region("all"), "wt-wt");
-        assert_eq!(locale_to_region(""), "wt-wt");
-        assert_eq!(locale_to_region("en-US"), "en-us");
-        assert_eq!(locale_to_region("en_US"), "en-us");
+    fn test_locale_to_ddg_region() {
+        use crate::engine::Locale;
+        assert_eq!(locale_to_ddg_region(&Locale::All), "wt-wt");
+        assert_eq!(locale_to_ddg_region(&Locale::EnUS), "en-us");
+        assert_eq!(locale_to_ddg_region(&Locale::EnGB), "en-gb");
+        assert_eq!(locale_to_ddg_region(&Locale::TrTR), "tr-tr");
+        assert_eq!(
+            locale_to_ddg_region(&Locale::Other("en_US".to_string())),
+            "en-us"
+        );
     }
 }
