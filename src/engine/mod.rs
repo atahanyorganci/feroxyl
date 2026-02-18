@@ -27,6 +27,6 @@ pub trait SearchProvider {
     /// Parse an HTTP response body. Updates internal state (e.g. result queue).
     fn parse_response(&mut self, body: &str) -> Result<(), Box<dyn Error + Send + Sync>>;
 
-    /// Yield the next result. None = provider needs another HTTP request (call build_request again).
-    fn results(&mut self) -> Option<Result<SearchResult, Box<dyn Error + Send + Sync>>>;
+    /// Yield the next result. None when no more results; caller loops back to build_request.
+    fn results(&mut self) -> Option<Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>>>;
 }

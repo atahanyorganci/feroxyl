@@ -30,7 +30,7 @@ async fn run_provider<P: SearchProvider>(
 
         while let Some(r) = provider.results() {
             match r {
-                Ok(sr) => all.push(sr),
+                Ok(sr) => all.extend(sr),
                 Err(e) => return Err(e),
             }
         }

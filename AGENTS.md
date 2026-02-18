@@ -44,15 +44,15 @@ Providers are **state machines**. HTTP is executed externally; providers only bu
 
 ```rust
 pub trait SearchProvider {
-    type Params;
+ type Params;
 
-    fn build_request(&mut self, params: Option<Self::Params>) -> Result<Option<Request>, ...>;
-    fn parse_response(&mut self, body: &str) -> Result<(), ...>;
-    fn results(&mut self) -> Option<Result<SearchResult, ...>>;
+ fn build_request(&mut self, params: Option<Self::Params>) -> Result<Option<Request>, ...>;
+ fn parse_response(&mut self, body: &str) -> Result<(), ...>;
+ fn results(&mut self) -> Option<Result<Vec<SearchResult>, ...>>;
 }
 ```
 
-**Flow:** `build_request(Some(params))` → execute HTTP → `parse_response(body)` → `results()` until `None` → optionally `build_request(None)` for next page → repeat.
+**Flow:** `build_request(params)` → execute HTTP → `parse_response(body)` → `results()` until `None` → loop back to `build_request(None)` for next page; `build_request` returns `None` when done.
 
 ### Adding a New Engine
 

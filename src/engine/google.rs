@@ -4,7 +4,6 @@ use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::Method;
 use reqwest::Url;
 use scraper::{ElementRef, Html, Selector};
-use std::collections::VecDeque;
 use std::error::Error;
 
 use crate::engine::{SearchProvider, SearchResult};
@@ -96,27 +95,17 @@ fn parse_google_result(element: ElementRef) -> Result<SearchResult, Box<dyn Erro
     })
 }
 
-/// Parses Google search HTML and returns results
-fn parse_response(html: &str) -> Vec<Result<SearchResult, Box<dyn Error>>> {
-    let document = Html::parse_fragment(html);
-    let selector = Selector::parse("div.MjjYud").unwrap();
-    document
-        .select(&selector)
-        .map(parse_google_result)
-        .collect()
-}
-
 /// Stateful Google search provider implementing SearchProvider.
 #[derive(Debug, Default)]
 pub struct Google {
-    params: Option<GoogleRequestParams>,
-    result_queue: VecDeque<SearchResult>,
-    request_sent: bool,
+    results: Vec<SearchResult>,
 }
 
 impl Google {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            results: Vec::with_capacity(32),
+        }
     }
 }
 
@@ -127,18 +116,10 @@ impl SearchProvider for Google {
         &mut self,
         params: Option<Self::Params>,
     ) -> Result<Option<reqwest::Request>, Box<dyn Error + Send + Sync>> {
-        if self.request_sent {
-            return Ok(None);
-        }
-
-        let params = params.or_else(|| self.params.clone());
         let params = match params {
             Some(p) => p,
             None => return Ok(None),
         };
-
-        self.params = Some(params.clone());
-        self.request_sent = true;
 
         let url =
             build_google_search_url(&params).map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -188,15 +169,21 @@ impl SearchProvider for Google {
         let end_index = html.rfind("</div>").ok_or("No </div> found")?;
         html = html[..end_index].to_string();
 
-        for r in parse_response(&html).into_iter().filter_map(|r| r.ok()) {
-            self.result_queue.push_back(r);
+        let document = Html::parse_fragment(&html);
+        let selector = Selector::parse("div.MjjYud").unwrap();
+        for result in document.select(&selector) {
+            if let Ok(result) = parse_google_result(result) {
+                self.results.push(result);
+            }
         }
         Ok(())
     }
 
-    fn results(
-        &mut self,
-    ) -> Option<Result<crate::engine::SearchResult, Box<dyn Error + Send + Sync>>> {
-        self.result_queue.pop_front().map(Ok)
+    fn results(&mut self) -> Option<Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>>> {
+        if self.results.is_empty() {
+            None
+        } else {
+            Some(Ok(std::mem::take(&mut self.results)))
+        }
     }
 }

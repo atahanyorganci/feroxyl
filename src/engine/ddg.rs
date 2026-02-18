@@ -6,7 +6,7 @@
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::Method;
 use scraper::{Html, Selector};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::error::Error;
 
 const BASE_URL: &str = "https://html.duckduckgo.com/html/";
@@ -226,7 +226,7 @@ pub struct DuckDuckGo {
     params: Option<DuckDuckGoParams>,
     phase: DdgPhase,
     vqd: Option<String>,
-    result_queue: VecDeque<crate::engine::SearchResult>,
+    results: Vec<crate::engine::SearchResult>,
 }
 
 impl Default for DuckDuckGo {
@@ -235,7 +235,7 @@ impl Default for DuckDuckGo {
             params: None,
             phase: DdgPhase::NeedVqd,
             vqd: None,
-            result_queue: VecDeque::new(),
+            results: Vec::with_capacity(32),
         }
     }
 }
@@ -248,7 +248,7 @@ impl DuckDuckGo {
     fn build_vqd_request(
         params: &DuckDuckGoParams,
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
-        let query_string = serde_urlencoded::to_string(&[("q", params.query.as_str())])
+        let query_string = serde_urlencoded::to_string([("q", params.query.as_str())])
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         let url = format!("{}?{}", DDG_SEARCH_URL, query_string);
         let url = reqwest::Url::parse(&url).map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -381,7 +381,7 @@ impl crate::engine::SearchProvider for DuckDuckGo {
         match parse_response(body) {
             Ok(response) => {
                 for r in response.results {
-                    self.result_queue.push_back(crate::engine::SearchResult {
+                    self.results.push(crate::engine::SearchResult {
                         title: r.title,
                         url: r.url,
                         content: r.content,
@@ -396,8 +396,12 @@ impl crate::engine::SearchProvider for DuckDuckGo {
 
     fn results(
         &mut self,
-    ) -> Option<Result<crate::engine::SearchResult, Box<dyn Error + Send + Sync>>> {
-        self.result_queue.pop_front().map(Ok)
+    ) -> Option<Result<Vec<crate::engine::SearchResult>, Box<dyn Error + Send + Sync>>> {
+        if self.results.is_empty() {
+            None
+        } else {
+            Some(Ok(std::mem::take(&mut self.results)))
+        }
     }
 }
 
