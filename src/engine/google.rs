@@ -259,19 +259,38 @@ impl SearchProvider for Google {
 
     fn parse_response(&mut self, body: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
         let mut html = body.to_string();
-        let start_index = html.find("<div").ok_or("No <div> found")?;
+        let start_index = html.find("<div").ok_or_else(|| {
+            tracing::warn!("Google response: no <div> start marker found");
+            std::io::Error::other("No <div> found")
+        })?;
         html = html[start_index..].to_string();
-        let end_index = html.rfind("</div>").ok_or("No </div> found")?;
+        let end_index = html.rfind("</div>").ok_or_else(|| {
+            tracing::warn!("Google response: no </div> end marker found");
+            std::io::Error::other("No </div> found")
+        })?;
         html = html[..end_index].to_string();
 
         let document = Html::parse_fragment(&html);
         let selector = Selector::parse("div.MjjYud").unwrap();
+        let mut skipped = 0u32;
         for result in document.select(&selector) {
-            if let Ok(result) = parse_google_result(result) {
-                self.results.push(result);
+            match parse_google_result(result) {
+                Ok(r) => self.results.push(r),
+                Err(e) => {
+                    skipped += 1;
+                    tracing::trace!(error = %e, "Skipped unparseable Google result");
+                }
             }
         }
+        if skipped > 0 {
+            tracing::debug!(
+                skipped,
+                total_candidates = self.results.len() + skipped as usize,
+                "Some Google result elements could not be parsed"
+            );
+        }
         if self.results.is_empty() {
+            tracing::warn!("Google returned no parseable results");
             Err("No results found".into())
         } else {
             Ok(())

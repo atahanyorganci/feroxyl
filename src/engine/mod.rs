@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::error::Error;
+use std::time::Duration;
 
 pub mod ddg;
 pub mod google;
@@ -147,19 +148,35 @@ pub struct RankedSearchResult {
 }
 
 /// Runs a search provider until completion, executing HTTP requests with the given client.
+#[tracing::instrument(skip(params), fields(provider = P::name(), query = %params.query))]
 pub async fn run_provider<P: SearchProvider>(
     params: &SearchParams,
 ) -> Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>> {
     let mut provider = P::default();
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(3))
+        .timeout(Duration::from_secs(5))
+        .build()?;
+
     loop {
+        tracing::debug!(provider = P::name(), "Building request");
         let request = provider.build_request(params)?;
         let response = client.execute(request).await?;
+        let status = response.status();
         let body = response.text().await?;
+        tracing::debug!(status = %status, body_len = body.len(), "Received response");
         provider.parse_response(&body)?;
 
-        if let Some(r) = provider.results() {
-            break r;
+        match provider.results() {
+            Some(Ok(results)) => {
+                tracing::info!(count = results.len(), "Provider completed");
+                break Ok(results);
+            }
+            Some(Err(e)) => {
+                tracing::error!(error = %e, "Provider failed");
+                return Err(e);
+            }
+            None => {}
         }
     }
 }
@@ -181,16 +198,30 @@ fn calculate_score(positions: &[usize]) -> f32 {
     positions.iter().map(|&p| weight / (p as f32)).sum()
 }
 
+#[tracing::instrument(skip(params), fields(query = %params.query))]
 pub async fn run_meta_search(
     params: &SearchParams,
 ) -> Result<Vec<RankedSearchResult>, Box<dyn Error + Send + Sync>> {
+    tracing::debug!("Starting parallel provider queries");
     let (ddg_res, google_res) = tokio::join!(
         run_provider::<ddg::DuckDuckGo>(params),
         run_provider::<google::Google>(params),
     );
 
-    let ddg_results = ddg_res.unwrap_or_default();
-    let google_results = google_res.unwrap_or_default();
+    let ddg_results = ddg_res.unwrap_or_else(|e| {
+        tracing::warn!(error = %e, provider = "ddg", "Provider failed, using empty results");
+        Vec::new()
+    });
+    let google_results = google_res.unwrap_or_else(|e| {
+        tracing::warn!(error = %e, provider = "google", "Provider failed, using empty results");
+        Vec::new()
+    });
+
+    tracing::debug!(
+        ddg_count = ddg_results.len(),
+        google_count = google_results.len(),
+        "Provider results received"
+    );
 
     let mut merged: HashMap<String, MergedEntry> = HashMap::new();
 
@@ -252,6 +283,7 @@ pub async fn run_meta_search(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
+    tracing::info!(count = ranked.len(), "Meta search completed");
     Ok(ranked)
 }
 

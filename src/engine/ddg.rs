@@ -118,6 +118,7 @@ pub fn parse_response(html: &str) -> Result<DuckDuckGoResponse, Box<dyn Error>> 
     let doc = Html::parse_document(html);
 
     if is_captcha(&doc) {
+        tracing::warn!("DuckDuckGo CAPTCHA detected");
         return Err("DuckDuckGo CAPTCHA detected".into());
     }
 
@@ -315,6 +316,7 @@ impl crate::engine::SearchProvider for DuckDuckGo {
         params: &SearchParams,
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
         if params.query.len() >= 500 {
+            tracing::warn!(len = params.query.len(), "Query too long for DuckDuckGo");
             return Err("Query too long (max 499 characters)".into());
         }
 
@@ -335,6 +337,9 @@ impl crate::engine::SearchProvider for DuckDuckGo {
     fn parse_response(&mut self, body: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
         if self.phase == DdgPhase::NeedVqd {
             self.vqd = extr(body, "vqd=\"", "\"");
+            if self.vqd.is_none() {
+                tracing::debug!("VQD token not found in DuckDuckGo response");
+            }
             self.phase = DdgPhase::NeedSearch;
             return Ok(());
         }
