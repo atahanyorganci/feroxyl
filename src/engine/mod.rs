@@ -283,6 +283,36 @@ pub enum Provider {
     Bing,
 }
 
+/// Error when parsing an invalid provider string.
+#[derive(Debug, thiserror::Error)]
+#[error("invalid provider: {0}")]
+pub struct InvalidProvider(pub String);
+
+impl std::str::FromStr for Provider {
+    type Err = InvalidProvider;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "duckduckgo" | "ddg" => Ok(Provider::DuckDuckGo),
+            "google" => Ok(Provider::Google),
+            "brave" => Ok(Provider::Brave),
+            "startpage" => Ok(Provider::Startpage),
+            "bing" => Ok(Provider::Bing),
+            other => Err(InvalidProvider(other.to_string())),
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Provider {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
 impl Provider {
     pub fn name(&self) -> &'static str {
         match self {
