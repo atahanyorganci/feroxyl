@@ -1,5 +1,15 @@
-use axum::{extract::Query, routing::get, Json, Router};
+use axum::{
+    extract::{Path, Query},
+    http::{header, StatusCode},
+    response::IntoResponse,
+    routing::get,
+    Json, Router,
+};
 use feroxyl::engine::{run_meta_search, Provider, RankedSearchResult, SearchParams};
+use reqwest::{
+    header::{HeaderName, HeaderValue},
+    Method, Url,
+};
 use std::error::Error;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -91,6 +101,58 @@ async fn search(
     Json(results)
 }
 
+async fn scrape(Path(path): Path<String>) -> impl IntoResponse {
+    let url = if path.starts_with("http://") || path.starts_with("https://") {
+        path
+    } else {
+        format!("https://{path}")
+    };
+    tracing::info!("Scraping URL: {}", url);
+
+    let mut request = reqwest::Request::new(Method::GET, Url::parse(&url).unwrap());
+    let headers = request.headers_mut();
+    headers.insert(
+        HeaderName::from_static("accept"),
+        HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"),
+    );
+    headers.insert(
+        HeaderName::from_static("accept-language"),
+        HeaderValue::from_static("en-US,en;q=0.9"),
+    );
+    headers.insert(
+        HeaderName::from_static("accept-encoding"),
+        HeaderValue::from_static("gzip, deflate, br, zstd"),
+    );
+
+    headers.insert(
+        HeaderName::from_static("user-agent"),
+        HeaderValue::from_static("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"),
+    );
+    headers.insert(
+        HeaderName::from_static("cache-control"),
+        HeaderValue::from_static("max-age=0"),
+    );
+    headers.insert(
+        HeaderName::from_static("upgrade-insecure-requests"),
+        HeaderValue::from_static("1"),
+    );
+
+    let client = reqwest::Client::new();
+
+    match client.execute(request).await {
+        Ok(response) => match response.text().await {
+            Ok(body) => (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "text/markdown; charset=utf-8")],
+                feroxyl::scrape::html_to_markdown(&body),
+            )
+                .into_response(),
+            Err(e) => (StatusCode::BAD_GATEWAY, e.to_string()).into_response(),
+        },
+        Err(e) => (StatusCode::BAD_GATEWAY, e.to_string()).into_response(),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     tracing_subscriber::registry()
@@ -103,6 +165,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let client = reqwest::Client::new();
     let app = Router::new()
         .route("/search", get(search))
+        .route("/scrape/*path", get(scrape))
         .layer(TraceLayer::new_for_http())
         .with_state(client);
 
