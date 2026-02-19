@@ -102,9 +102,8 @@ Code should be structured so that IO operations are handled externally to how th
 
 Always run formatters and linters to ensure code is formatted and linted correctly.
 
-- Rust formatter: `nix develop --command "cargo fmt"`
+- Formatter `nix fmt`, this command formats all sources in the repository.
 - Rust linter: `nix develop --command "cargo clippy"`
-- Nix formatter: `nix fmt`
 
 ### Errors
 
