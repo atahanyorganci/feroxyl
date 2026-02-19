@@ -1,11 +1,11 @@
 //! Brave search engine
 //!
-//! Port of SearXNG's brave.py engine. Supports web search (category "search").
-//! Uses HTML scraping at https://search.brave.com/
+//! Port of `SearXNG`'s brave.py engine. Supports web search (category "search").
+//! Uses HTML scraping at <https://search.brave.com>
 
-use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::Method;
 use reqwest::Url;
+use reqwest::header::{HeaderName, HeaderValue};
 use scraper::{ElementRef, Html, Selector};
 use std::error::Error;
 
@@ -34,22 +34,20 @@ fn safesearch_to_brave(s: Safesearch) -> &'static str {
 /// Country cookie from locale (e.g. "en-CA" -> "ca", "all" -> "all").
 fn locale_to_country(locale: &Locale) -> &'static str {
     match locale {
-        Locale::All => "all",
         Locale::EnUS => "us",
         Locale::EnGB => "gb",
         Locale::TrTR => "tr",
-        Locale::Other(_) => "all",
+        Locale::All | Locale::Other(_) => "all",
     }
 }
 
 /// UI language cookie from locale (e.g. "en-US" -> "en-us").
 fn locale_to_ui_lang(locale: &Locale) -> &'static str {
     match locale {
-        Locale::All => "all",
         Locale::EnUS => "en-us",
         Locale::EnGB => "en-gb",
         Locale::TrTR => "tr-tr",
-        Locale::Other(_) => "all",
+        Locale::All | Locale::Other(_) => "all",
     }
 }
 
@@ -59,7 +57,7 @@ fn extract_text(element: ElementRef) -> String {
 }
 
 /// Parse Brave web search HTML response.
-fn parse_search_response(html: &str) -> Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>> {
+fn parse_search_response(html: &str) -> Vec<SearchResult> {
     let doc = Html::parse_document(html);
 
     // Only web result snippets (excludes related-queries which also have class "snippet")
@@ -134,10 +132,10 @@ fn parse_search_response(html: &str) -> Result<Vec<SearchResult>, Box<dyn Error 
         });
     }
 
-    Ok(results)
+    results
 }
 
-/// Stateful Brave search provider implementing SearchProvider.
+/// Stateful Brave search provider implementing `SearchProvider`.
 #[derive(Debug)]
 pub struct Brave {
     results: Vec<SearchResult>,
@@ -248,13 +246,8 @@ impl SearchProvider for Brave {
     }
 
     fn parse_response(&mut self, body: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
-        match parse_search_response(body) {
-            Ok(results) => {
-                self.results = results;
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
+        self.results = parse_search_response(body);
+        Ok(())
     }
 
     fn results(&mut self) -> Option<Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>>> {

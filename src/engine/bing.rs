@@ -1,11 +1,11 @@
 //! Bing search engine
 //!
-//! Port of SearXNG's bing.py engine. Supports web search at https://www.bing.com/search
+//! Port of `SearXNG`'s bing.py engine. Supports web search at <https://www.bing.com/search>
 
 use base64::Engine;
-use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::Method;
 use reqwest::Url;
+use reqwest::header::{HeaderName, HeaderValue};
 use scraper::{ElementRef, Html, Selector};
 use std::error::Error;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -14,13 +14,13 @@ use crate::engine::{Locale, SearchParams, SearchProvider, SearchResult, TimeRang
 
 const BASE_URL: &str = "https://www.bing.com/search";
 
-/// Page offset for Bing pagination: (page_no - 1) * 10 + 1
+/// Page offset for Bing pagination: (`page_no` - 1) * 10 + 1
 fn page_offset(page_no: u32) -> u32 {
     (page_no.saturating_sub(1)) * 10 + 1
 }
 
 /// Bing engine region from Locale (market code, e.g. "en-us", "en-gb").
-/// Locale::Other defaults to en-us.
+/// `Locale::Other` defaults to en-us.
 fn locale_to_region(locale: &Locale) -> &'static str {
     match locale {
         Locale::All | Locale::EnUS | Locale::Other(_) => "en-us",
@@ -52,7 +52,7 @@ fn time_range_to_bing_filter(tr: TimeRange) -> Option<String> {
     }
 }
 
-/// Decode Bing redirect URL (https://www.bing.com/ck/a?...) to real URL.
+/// Decode Bing redirect URL (<https://www.bing.com/ck/a>?...) to real URL.
 fn decode_bing_redirect_url(url: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
     let url_obj = Url::parse(url).map_err(|e| std::io::Error::other(e.to_string()))?;
     let param_u = url_obj
@@ -87,7 +87,7 @@ fn parse_search_response(
 ) -> Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>> {
     let doc = Html::parse_document(html);
 
-    let results_selector = Selector::parse(r#"ol#b_results li.b_algo"#).unwrap();
+    let results_selector = Selector::parse(r"ol#b_results li.b_algo").unwrap();
     let link_selector = Selector::parse("h2 a").unwrap();
     let content_selector = Selector::parse("p").unwrap();
 
@@ -154,8 +154,7 @@ fn parse_search_response(
             }
             if expected_start != start {
                 return Err(std::io::Error::other(format!(
-                    "Bing rate limit: expected results to start at {}, but got {}",
-                    expected_start, start
+                    "Bing rate limit: expected results to start at {expected_start}, but got {start}"
                 ))
                 .into());
             }
@@ -165,8 +164,8 @@ fn parse_search_response(
     Ok(results)
 }
 
-/// Parse sb_count span text to extract (start, result_len).
-/// Mimics Python: split by r'-\d+', first part = start, second part = strip non-digits for result_len.
+/// Parse `sb_count` span text to extract (start, `result_len`).
+/// Mimics Python: split by r'-\d+', first part = start, second part = strip non-digits for `result_len`.
 fn parse_sb_count(text: &str) -> (u32, u32) {
     let text = text.trim();
     let (start, rest) = if let Some(hyphen_pos) = text.find('-') {
@@ -176,12 +175,12 @@ fn parse_sb_count(text: &str) -> (u32, u32) {
         // Skip digits immediately after hyphen (Python: -\d+)
         let digits_len = after_hyphen
             .chars()
-            .take_while(|c| c.is_ascii_digit())
+            .take_while(char::is_ascii_digit)
             .count();
         let rest = &after_hyphen[digits_len..];
         let start = start_str
             .chars()
-            .filter(|c| c.is_ascii_digit())
+            .filter(char::is_ascii_digit)
             .collect::<String>()
             .parse()
             .unwrap_or(1);
@@ -192,7 +191,7 @@ fn parse_sb_count(text: &str) -> (u32, u32) {
 
     let result_len: u32 = rest
         .chars()
-        .filter(|c| c.is_ascii_digit())
+        .filter(char::is_ascii_digit)
         .collect::<String>()
         .parse()
         .unwrap_or(0);
@@ -200,7 +199,7 @@ fn parse_sb_count(text: &str) -> (u32, u32) {
     (start, result_len)
 }
 
-/// Stateful Bing search provider implementing SearchProvider.
+/// Stateful Bing search provider implementing `SearchProvider`.
 #[derive(Debug)]
 pub struct Bing {
     results: Vec<SearchResult>,
@@ -244,7 +243,7 @@ impl SearchProvider for Bing {
             }
 
             if let Some(ref filter) = time_range_to_bing_filter(params.time_range) {
-                pairs.append_pair("filters", &format!("ex1:\"{}\"", filter));
+                pairs.append_pair("filters", &format!("ex1:\"{filter}\""));
             }
         }
 
@@ -285,9 +284,9 @@ impl SearchProvider for Bing {
         );
 
         // Bing cookies for locale
-        let edge_cd = format!("m={}&u={}", region, language);
-        let edge_s = format!("mkt={}&ui={}", region, language);
-        let cookie_value = format!("_EDGE_CD={}; _EDGE_S={}", edge_cd, edge_s);
+        let edge_cd = format!("m={region}&u={language}");
+        let edge_s = format!("mkt={region}&ui={language}");
+        let cookie_value = format!("_EDGE_CD={edge_cd}; _EDGE_S={edge_s}");
         headers.insert(
             HeaderName::from_static("cookie"),
             HeaderValue::try_from(cookie_value)

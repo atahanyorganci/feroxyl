@@ -1,12 +1,12 @@
 //! Startpage search engine
 //!
-//! Port of SearXNG's startpage.py engine. Supports web search (category "web").
+//! Port of `SearXNG`'s startpage.py engine. Supports web search (category "web").
 //! Uses HTML scraping and requires fetching an sc-code from the homepage first
-//! to avoid bot detection. POSTs to https://www.startpage.com/sp/search
+//! to avoid bot detection. POSTs to <https://www.startpage.com/sp/search>
 
-use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::Method;
 use reqwest::Url;
+use reqwest::header::{HeaderName, HeaderValue};
 use scraper::{Html, Selector};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -31,7 +31,7 @@ pub enum StartpageError {
     ParseError(String),
 }
 
-/// Time range to Startpage with_date param (d, w, m, y).
+/// Time range to Startpage `with_date` param (d, w, m, y).
 fn time_range_to_startpage(tr: TimeRange) -> &'static str {
     match tr {
         TimeRange::Any => "",
@@ -42,12 +42,11 @@ fn time_range_to_startpage(tr: TimeRange) -> &'static str {
     }
 }
 
-/// Safesearch to Startpage disable_family_filter cookie (0=strict, 1=off).
+/// Safesearch to Startpage `disable_family_filter` cookie (0=strict, 1=off).
 fn safesearch_to_disable_family_filter(s: Safesearch) -> &'static str {
     match s {
         Safesearch::Off => "1",
-        Safesearch::Moderate => "0",
-        Safesearch::Strict => "0",
+        Safesearch::Moderate | Safesearch::Strict => "0",
     }
 }
 
@@ -55,21 +54,19 @@ fn safesearch_to_disable_family_filter(s: Safesearch) -> &'static str {
 fn locale_to_language(locale: &Locale) -> Option<&'static str> {
     match locale {
         Locale::All => None,
-        Locale::EnUS => Some("english"),
+        Locale::EnUS | Locale::Other(_) => Some("english"),
         Locale::EnGB => Some("english_uk"),
         Locale::TrTR => Some("turkish"),
-        Locale::Other(_) => Some("english"),
     }
 }
 
-/// Map Locale to Startpage region code (for search_results_region cookie).
+/// Map Locale to Startpage region code (for `search_results_region` cookie).
 fn locale_to_region(locale: &Locale) -> Option<&'static str> {
     match locale {
-        Locale::All => None,
         Locale::EnUS => Some("en-US"),
         Locale::EnGB => Some("en_GB"),
         Locale::TrTR => Some("tr_TR"),
-        Locale::Other(_) => None,
+        Locale::All | Locale::Other(_) => None,
     }
 }
 
@@ -117,8 +114,7 @@ fn parse_published_date_prefix(content: &str) -> String {
             && prefix
                 .split_whitespace()
                 .next()
-                .map(|s| s.chars().all(|c| c.is_ascii_digit()))
-                .unwrap_or(false)
+                .is_some_and(|s| s.chars().all(|c| c.is_ascii_digit()))
         {
             return content[pos + date_suffix.len()..].trim_start().to_string();
         }
@@ -207,7 +203,7 @@ fn parse_search_response(body: &str) -> Result<Vec<SearchResult>, Box<dyn Error 
 
     // Extracted content is the props object body; wrap with { } to form valid JSON.
     // Need two closing braces: content doesn't end with }; add }} to close.
-    let json_str = format!("{{{}}}}}", json_str);
+    let json_str = format!("{{{json_str}}}}}");
     let parsed: StartpageResponse = serde_json::from_str(&json_str)
         .map_err(|e: serde_json::Error| StartpageError::ParseError(e.to_string()))?;
 
@@ -233,7 +229,7 @@ fn extract_sc_code(html: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
 
     let doc = Html::parse_document(html);
     let selector = Selector::parse("form#search input[name=\"sc\"]")
-        .map_err(|e| StartpageError::ParseError(format!("invalid selector: {}", e)))?;
+        .map_err(|e| StartpageError::ParseError(format!("invalid selector: {e}")))?;
 
     let input = doc
         .select(&selector)
@@ -281,12 +277,12 @@ fn build_preferences_cookie(
 
     cookie
         .iter()
-        .map(|(k, v)| format!("{}EEE{}", k, v))
+        .map(|(k, v)| format!("{k}EEE{v}"))
         .collect::<Vec<_>>()
         .join("N1N")
 }
 
-/// Stateful Startpage search provider implementing SearchProvider.
+/// Stateful Startpage search provider implementing `SearchProvider`.
 #[derive(Debug)]
 pub struct Startpage {
     phase: StartpagePhase,
@@ -308,7 +304,7 @@ impl Startpage {
     fn build_sc_code_request(
         _params: &SearchParams,
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
-        let url = Url::parse(&format!("{}/", BASE_URL))
+        let url = Url::parse(&format!("{BASE_URL}/"))
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         let mut request = reqwest::Request::new(Method::GET, url);
 

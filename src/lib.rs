@@ -1,3 +1,6 @@
+#![deny(clippy::all)]
+#![deny(clippy::pedantic)]
+
 //! Meta search engine library
 
 pub mod api;

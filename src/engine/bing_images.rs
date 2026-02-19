@@ -1,11 +1,11 @@
 //! Bing Images search engine
 //!
-//! Port of SearXNG's bing_images.py engine.
-//! Uses the HTML API at https://www.bing.com/images/async
+//! Port of `SearXNG`'s `bing_images.py` engine.
+//! Uses the HTML API at <https://www.bing.com/images/async>
 
-use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::Method;
 use reqwest::Url;
+use reqwest::header::{HeaderName, HeaderValue};
 use scraper::{Html, Selector};
 use std::error::Error;
 
@@ -44,7 +44,7 @@ struct IuscMetadata {
     desc: Option<String>,
 }
 
-/// Parse Bing Images HTML response into ImageResults.
+/// Parse Bing Images HTML response into `ImageResults`.
 fn parse_response(html: &str) -> Result<Vec<ImageResult>, Box<dyn Error + Send + Sync>> {
     let doc = Html::parse_document(html);
 
@@ -67,7 +67,7 @@ fn parse_response(html: &str) -> Result<Vec<ImageResult>, Box<dyn Error + Send +
         };
 
         let metadata: IuscMetadata = serde_json::from_str(metadata_json)
-            .map_err(|e| std::io::Error::other(format!("Invalid iusc metadata: {}", e)))?;
+            .map_err(|e| std::io::Error::other(format!("Invalid iusc metadata: {e}")))?;
 
         let title = li
             .select(&infnmpt_selector)
@@ -138,7 +138,7 @@ fn parse_response(html: &str) -> Result<Vec<ImageResult>, Box<dyn Error + Send +
     Ok(results)
 }
 
-/// Stateful Bing Images search provider implementing ImageSearchProvider.
+/// Stateful Bing Images search provider implementing `ImageSearchProvider`.
 #[derive(Debug)]
 pub struct BingImages {
     results: Vec<ImageResult>,
@@ -173,7 +173,7 @@ impl ImageSearchProvider for BingImages {
             pairs.append_pair("count", "35");
 
             if let Some(minutes) = time_range_to_minutes(params.time_range) {
-                pairs.append_pair("qft", &format!("filterui:age-lt{}", minutes));
+                pairs.append_pair("qft", &format!("filterui:age-lt{minutes}"));
             }
         }
 
@@ -200,9 +200,9 @@ impl ImageSearchProvider for BingImages {
             ),
         );
 
-        let edge_cd = format!("m={}&u={}", region, language);
-        let edge_s = format!("mkt={}&ui={}", region, language);
-        let cookie_value = format!("_EDGE_CD={}; _EDGE_S={}", edge_cd, edge_s);
+        let edge_cd = format!("m={region}&u={language}");
+        let edge_s = format!("mkt={region}&ui={language}");
+        let cookie_value = format!("_EDGE_CD={edge_cd}; _EDGE_S={edge_s}");
         headers.insert(
             HeaderName::from_static("cookie"),
             HeaderValue::try_from(cookie_value)

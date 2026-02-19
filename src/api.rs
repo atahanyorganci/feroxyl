@@ -3,17 +3,17 @@
 //! Exposed for integration testing and server setup.
 
 use crate::engine::{
-    run_image_provider, run_meta_search, BingImages, ImageResult, Provider, RankedSearchResult,
-    SearchParams,
+    BingImages, ImageResult, Provider, RankedSearchResult, SearchParams, run_image_provider,
+    run_meta_search,
 };
 use axum::{
+    Json, Router,
     extract::{Path, Query},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::IntoResponse,
     routing::get,
-    Json, Router,
 };
-use reqwest::{header::HeaderName, header::HeaderValue, Method, Url};
+use reqwest::{Method, Url, header::HeaderName, header::HeaderValue};
 use tower_http::trace::TraceLayer;
 
 const DEFAULT_PROVIDERS: &[Provider] = &[

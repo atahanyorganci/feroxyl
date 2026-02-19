@@ -1,10 +1,10 @@
-//! DuckDuckGo WEB search engine
+//! `DuckDuckGo` WEB search engine
 //!
-//! Port of SearXNG's duckduckgo.py engine.
-//! Uses the HTML API at https://html.duckduckgo.com/html/
+//! Port of `SearXNG`'s duckduckgo.py engine.
+//! Uses the HTML API at <https://html.duckduckgo.com/html>
 
-use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::Method;
+use reqwest::header::{HeaderName, HeaderValue};
 use scraper::{Html, Selector};
 use std::collections::HashMap;
 use std::error::Error;
@@ -14,7 +14,7 @@ use crate::engine::{Locale, SearchParams, SearchResult, TimeRange};
 const BASE_URL: &str = "https://html.duckduckgo.com/html/";
 const DDG_SEARCH_URL: &str = "https://duckduckgo.com/";
 
-/// DuckDuckGo region code from Locale: All -> "wt-wt"; otherwise lowercased with hyphens.
+/// `DuckDuckGo` region code from Locale: All -> "wt-wt"; otherwise lowercased with hyphens.
 fn locale_to_ddg_region(locale: &Locale) -> String {
     match locale {
         Locale::All => "wt-wt".to_string(),
@@ -35,7 +35,7 @@ fn time_range_to_ddg_code(tr: TimeRange) -> &'static str {
     }
 }
 
-/// A single search result from DuckDuckGo
+/// A single search result from `DuckDuckGo`
 #[derive(Debug, Clone)]
 pub struct DuckDuckGoResult {
     pub title: String,
@@ -57,7 +57,7 @@ fn extr(txt: &str, begin: &str, end: &str) -> Option<String> {
     Some(txt[after_begin..after_begin + end_idx].to_string())
 }
 
-/// Builds the form data for the DuckDuckGo POST request
+/// Builds the form data for the `DuckDuckGo` POST request
 fn build_form_data(
     query: &str,
     page: u32,
@@ -105,7 +105,7 @@ fn is_captcha(doc: &Html) -> bool {
     doc.select(&selector).next().is_some()
 }
 
-/// Parses the HTML response from DuckDuckGo
+/// Parses the HTML response from `DuckDuckGo`
 pub fn parse_response(html: &str) -> Result<DuckDuckGoResponse, Box<dyn Error>> {
     let doc = Html::parse_document(html);
 
@@ -156,7 +156,7 @@ pub fn parse_response(html: &str) -> Result<DuckDuckGoResponse, Box<dyn Error>> 
     Ok(DuckDuckGoResponse { results })
 }
 
-/// Phase of the DuckDuckGo state machine.
+/// Phase of the `DuckDuckGo` state machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DdgPhase {
     /// Need to fetch VQD token (GET to duckduckgo.com)
@@ -167,7 +167,7 @@ enum DdgPhase {
     Done,
 }
 
-/// Stateful DuckDuckGo search provider implementing SearchProvider.
+/// Stateful `DuckDuckGo` search provider implementing `SearchProvider`.
 #[derive(Debug)]
 pub struct DuckDuckGo {
     phase: DdgPhase,
@@ -191,7 +191,7 @@ impl DuckDuckGo {
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
         let query_string = serde_urlencoded::to_string([("q", params.query.as_str())])
             .map_err(|e| std::io::Error::other(e.to_string()))?;
-        let url = format!("{}?{}", DDG_SEARCH_URL, query_string);
+        let url = format!("{DDG_SEARCH_URL}?{query_string}");
         let url = reqwest::Url::parse(&url).map_err(|e| std::io::Error::other(e.to_string()))?;
         let mut request = reqwest::Request::new(Method::GET, url);
         let headers = request.headers_mut();
@@ -262,7 +262,7 @@ impl DuckDuckGo {
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             ),
         );
-        let cookie_value = format!("kl={}", region);
+        let cookie_value = format!("kl={region}");
         headers.insert(
             HeaderName::from_static("cookie"),
             HeaderValue::try_from(cookie_value)

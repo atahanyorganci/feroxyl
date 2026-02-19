@@ -1,9 +1,15 @@
+use html5ever::ParseOpts;
 use html5ever::parse_document;
 use html5ever::tendril::TendrilSink;
 use markup5ever_rcdom::{Handle, NodeData, RcDom};
 
+/// Converts HTML to markdown by walking the DOM and extracting text with basic formatting.
+///
+/// # Panics
+///
+/// Panics if the HTML cannot be parsed (e.g. invalid UTF-8 or malformed HTML).
 pub fn html_to_markdown(html: &str) -> String {
-    let dom = parse_document(RcDom::default(), Default::default())
+    let dom = parse_document(RcDom::default(), ParseOpts::default())
         .from_utf8()
         .read_from(&mut html.as_bytes())
         .unwrap();
@@ -25,7 +31,7 @@ pub fn html_to_markdown(html: &str) -> String {
 fn find_element_recursive(node: &Handle, tag: &str) -> Option<Handle> {
     match &node.data {
         NodeData::Element { name, .. } if name.local.as_ref() == tag => {
-            return Some(Handle::clone(node))
+            return Some(Handle::clone(node));
         }
         _ => {}
     }

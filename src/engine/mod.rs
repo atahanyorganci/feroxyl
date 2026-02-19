@@ -1,6 +1,6 @@
 //! Search engine implementations
 //!
-//! Common parameters follow SearXNG's RequestParams / SearchQuery model.
+//! Common parameters follow `SearXNG`'s `RequestParams` / `SearchQuery` model.
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -29,8 +29,8 @@ pub struct SearchResult {
 }
 
 /// Image search result type for image providers.
-/// Mirrors SearXNG's images.html template schema used by bing_images, google_images,
-/// duckduckgo_extra, brave, etc.
+/// Mirrors `SearXNG`'s images.html template schema used by `bing_images`, `google_images`,
+/// `duckduckgo_extra`, brave, etc.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ImageResult {
     /// URL to the source page where the image is hosted.
@@ -55,7 +55,7 @@ pub struct ImageResult {
     pub author: Option<String>,
 }
 
-/// Time range filter for search results (SearXNG: time_range).
+/// Time range filter for search results (`SearXNG`: `time_range`).
 /// Maps to engine-specific codes (e.g. DDG: d/w/m/y, Google: qdr:d/w/m/y).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -68,7 +68,7 @@ pub enum TimeRange {
     Year,
 }
 
-/// Safe search filter level (SearXNG: safesearch 0/1/2).
+/// Safe search filter level (`SearXNG`: safesearch 0/1/2).
 /// 0: off, 1: moderate, 2: strict.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -80,7 +80,7 @@ pub enum Safesearch {
 }
 
 /// Locale/language for search results (BCP 47 style).
-/// Mirrors SearXNG's searxng_locale.
+/// Mirrors `SearXNG`'s `searxng_locale`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum Locale {
@@ -100,6 +100,7 @@ pub enum Locale {
 impl Locale {
     /// BCP 47 tag for this locale (e.g. "en-US", "tr-TR").
     /// Returns "all" for `All`.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             Locale::All => "all",
@@ -157,7 +158,7 @@ impl From<Locale> for String {
 }
 
 /// Common search parameters shared by all providers.
-/// Mirrors SearXNG's RequestParams: query, safesearch, time_range, searxng_locale.
+/// Mirrors `SearXNG`'s `RequestParams`: query, safesearch, `time_range`, `searxng_locale`.
 #[derive(Debug, Clone, Default)]
 pub struct SearchParams {
     /// Search query string
@@ -182,10 +183,14 @@ pub struct RankedSearchResult {
     /// Search result positions in search engines.
     pub position: Vec<(&'static str, usize)>,
     /// Final score calculated from positions.
-    pub score: f32,
+    pub score: f64,
 }
 
 /// Runs a search provider until completion, executing HTTP requests with the given client.
+///
+/// # Errors
+///
+/// Returns an error if the HTTP request fails, response parsing fails, or the provider returns an error.
 #[tracing::instrument(skip(params), fields(provider = P::name(), query = %params.query))]
 pub async fn run_provider<P: SearchProvider>(
     params: &SearchParams,
@@ -232,6 +237,11 @@ pub async fn run_provider<P: SearchProvider>(
     }
 }
 
+/// Runs multiple search providers in parallel and merges results by URL with ranking.
+///
+/// # Errors
+///
+/// Does not fail overall; individual provider failures are logged and skipped.
 #[tracing::instrument(skip(params), fields(query = %params.query))]
 pub async fn run_meta_search(
     providers: &[Provider],
@@ -264,10 +274,9 @@ pub async fn run_meta_search(
             Err(e) => {
                 if e.is_cancelled() {
                     break;
-                } else {
-                    tracing::warn!(error = %e, "Provider failed");
-                    continue;
                 }
+                tracing::warn!(error = %e, "Provider failed");
+                continue;
             }
         };
         for (pos, r) in results.into_iter().enumerate() {
@@ -275,14 +284,18 @@ pub async fn run_meta_search(
                 .entry(r.url.clone())
                 .and_modify(|existing| {
                     existing.position.push((engine_name, pos + 1));
-                    existing.score += 1.0 / ((pos + 1) as f32);
+                    let rank = u32::try_from(pos + 1).unwrap_or(u32::MAX);
+                    existing.score += 1.0 / f64::from(rank);
                 })
-                .or_insert_with(|| RankedSearchResult {
-                    title: r.title,
-                    url: r.url,
-                    content: r.content,
-                    position: vec![(engine_name, pos + 1)],
-                    score: 1.0 / (pos + 1) as f32,
+                .or_insert_with(|| {
+                    let rank = u32::try_from(pos + 1).unwrap_or(u32::MAX);
+                    RankedSearchResult {
+                        title: r.title,
+                        url: r.url,
+                        content: r.content,
+                        position: vec![(engine_name, pos + 1)],
+                        score: 1.0 / f64::from(rank),
+                    }
                 });
         }
     }
@@ -312,36 +325,54 @@ where
 
     /// Build the next request to send. Returns None when no more requests.
     /// params: Some on first call, None on continuation (provider uses stored state).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if URL construction or request building fails.
     fn build_request(
         &mut self,
         params: &SearchParams,
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>>;
 
     /// Parse an HTTP response body. Updates internal state (e.g. result queue).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if response parsing fails.
     fn parse_response(&mut self, body: &str) -> Result<(), Box<dyn Error + Send + Sync>>;
 
-    /// Yield the next result. None when no more results; caller loops back to build_request.
+    /// Yield the next result. None when no more results; caller loops back to `build_request`.
     fn results(&mut self) -> Option<Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>>>;
 }
 
-/// Trait for image search providers. Same state-machine flow as SearchProvider but yields ImageResult.
+/// Trait for image search providers. Same state-machine flow as `SearchProvider` but yields `ImageResult`.
 pub trait ImageSearchProvider
 where
     Self: Default,
 {
     fn name() -> &'static str;
 
+    /// # Errors
+    ///
+    /// Returns an error if URL construction or request building fails.
     fn build_request(
         &mut self,
         params: &SearchParams,
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>>;
 
+    /// # Errors
+    ///
+    /// Returns an error if response parsing fails.
     fn parse_response(&mut self, body: &str) -> Result<(), Box<dyn Error + Send + Sync>>;
 
     fn results(&mut self) -> Option<Result<Vec<ImageResult>, Box<dyn Error + Send + Sync>>>;
 }
 
 /// Runs an image search provider until completion.
+///
+/// # Errors
+///
+/// Returns an error if the HTTP request fails, response parsing fails, or the provider returns an error.
 #[tracing::instrument(skip(params), fields(provider = P::name(), query = %params.query))]
 pub async fn run_image_provider<P: ImageSearchProvider>(
     params: &SearchParams,
@@ -428,6 +459,7 @@ impl<'de> serde::Deserialize<'de> for Provider {
 }
 
 impl Provider {
+    #[must_use]
     pub fn name(&self) -> &'static str {
         match self {
             Provider::DuckDuckGo => DuckDuckGo::name(),
@@ -438,6 +470,9 @@ impl Provider {
         }
     }
 
+    /// # Errors
+    ///
+    /// Returns an error if the provider fails (HTTP, parsing, or provider error).
     pub async fn run(
         &self,
         params: &SearchParams,

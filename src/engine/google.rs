@@ -1,18 +1,18 @@
 //! Google search engine
 //!
-//! Port of SearXNG's google.py engine. Uses async/arc HTML format.
+//! Port of `SearXNG`'s google.py engine. Uses async/arc HTML format.
 
 use rand::Rng;
-use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::Method;
 use reqwest::Url;
+use reqwest::header::{HeaderName, HeaderValue};
 use scraper::{ElementRef, Html, Selector};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
 use crate::engine::{Locale, Safesearch, SearchParams, SearchProvider, SearchResult, TimeRange};
 
-/// Charset for arc_id random string (matches SearXNG: a-zA-Z0-9_-)
+/// Charset for `arc_id` random string (matches `SearXNG`: a-zA-Z0-9_-)
 const ARC_ID_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
 
 /// Time range to Google tbs (qdr:) code
@@ -45,24 +45,22 @@ fn locale_to_google_hl(locale: &Locale) -> &str {
     }
 }
 
-/// Google lr (language restriction) param, e.g. "lang_en".
+/// Google lr (language restriction) param, e.g. "`lang_en`".
 fn locale_to_google_lr(locale: &Locale) -> Option<&'static str> {
     match locale {
-        Locale::All => None,
         Locale::EnUS | Locale::EnGB => Some("lang_en"),
         Locale::TrTR => Some("lang_tr"),
-        Locale::Other(_) => None,
+        Locale::All | Locale::Other(_) => None,
     }
 }
 
 /// Google cr (country restriction) param, e.g. "countryUS".
 fn locale_to_google_cr(locale: &Locale) -> Option<&'static str> {
     match locale {
-        Locale::All => None,
         Locale::EnUS => Some("countryUS"),
         Locale::EnGB => Some("countryGB"),
         Locale::TrTR => Some("countryTR"),
-        Locale::Other(_) => None,
+        Locale::All | Locale::Other(_) => None,
     }
 }
 
@@ -91,7 +89,7 @@ fn build_google_search_url(
             .append_pair("asearch", "arc")
             .append_pair("async", async_param);
         if let Some(tbs) = time_range_to_google_tbs(params.time_range) {
-            pairs.append_pair("tbs", &format!("qdr:{}", tbs));
+            pairs.append_pair("tbs", &format!("qdr:{tbs}"));
         }
         if params.safesearch != Safesearch::Off {
             pairs.append_pair("safe", safesearch_to_google(params.safesearch));
@@ -136,7 +134,7 @@ fn extract_url(root: ElementRef) -> Result<String, Box<dyn Error>> {
     let link_selector = Selector::parse("a[href*='/url?q=']").unwrap();
     if let Some(link) = root.select(&link_selector).next() {
         let href = link.value().attr("href").unwrap();
-        let url = format!("https://www.google.com{}", href);
+        let url = format!("https://www.google.com{href}");
         let url = Url::parse(&url).unwrap();
         let url = url
             .query_pairs()
@@ -161,11 +159,11 @@ fn parse_google_result(element: ElementRef) -> Result<SearchResult, Box<dyn Erro
     })
 }
 
-/// Stateful Google search provider implementing SearchProvider.
+/// Stateful Google search provider implementing `SearchProvider`.
 #[derive(Debug)]
 pub struct Google {
     results: Vec<SearchResult>,
-    /// arc_id prefix, regenerated every hour (SearXNG behavior)
+    /// `arc_id` prefix, regenerated every hour (`SearXNG` behavior)
     arc_id_prefix: Option<String>,
     arc_id_created_at: Option<Instant>,
 }
@@ -182,13 +180,12 @@ impl Default for Google {
 
 impl Google {
     /// Format of the async parameter for Google's arc UI.
-    /// arc_id is randomly generated and cached for 1 hour on the provider.
+    /// `arc_id` is randomly generated and cached for 1 hour on the provider.
     fn ui_async(&mut self, start: u32) -> String {
         let invalidate = self.arc_id_prefix.is_none()
             || self
                 .arc_id_created_at
-                .map(|t| t.elapsed() > Duration::from_secs(3600))
-                .unwrap_or(true);
+                .is_none_or(|t| t.elapsed() > Duration::from_secs(3600));
 
         if invalidate {
             let mut rng = rand::rng();
@@ -201,7 +198,7 @@ impl Google {
         }
 
         let prefix = self.arc_id_prefix.as_ref().unwrap();
-        format!("arc_id:srp_{}_1{:02},use_ac:true,_fmt:prog", prefix, start)
+        format!("arc_id:srp_{prefix}_1{start:02},use_ac:true,_fmt:prog")
     }
 }
 
