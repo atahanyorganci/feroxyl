@@ -61,7 +61,7 @@
     packages.feroxyl = feroxyl;
     devShells.default = craneLibNightly.devShell {
       checks = self'.checks;
-      packages = [rustToolchain];
+      packages = [rustToolchain pkgs.cargo-watch];
       RUST_SRC_PATH = "${rustToolchain.passthru.availableComponents.rust-src}/lib/rustlib/src/rust/library";
     };
   };
