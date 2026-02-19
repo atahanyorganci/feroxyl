@@ -19,6 +19,8 @@ mod google_images;
 mod startpage;
 mod startpage_images;
 mod unsplash;
+mod yahoo;
+mod yandex;
 
 pub use bing::Bing;
 pub use bing_images::BingImages;
@@ -29,6 +31,8 @@ pub use google_images::GoogleImages;
 pub use startpage::Startpage;
 pub use startpage_images::StartpageImages;
 pub use unsplash::Unsplash;
+pub use yahoo::Yahoo;
+pub use yandex::Yandex;
 
 /// Unified search result type for all providers
 #[derive(Debug, Clone, serde::Serialize)]
@@ -469,6 +473,8 @@ pub enum Provider {
     Brave,
     Startpage,
     Bing,
+    Yahoo,
+    Yandex,
 }
 
 /// Error when parsing an invalid provider string.
@@ -490,6 +496,8 @@ impl std::str::FromStr for Provider {
             "brave" => Ok(Provider::Brave),
             "startpage" => Ok(Provider::Startpage),
             "bing" => Ok(Provider::Bing),
+            "yahoo" => Ok(Provider::Yahoo),
+            "yandex" => Ok(Provider::Yandex),
             other => Err(InvalidProvider(other.to_string())),
         }
     }
@@ -516,6 +524,8 @@ impl Provider {
             Provider::Brave => Brave::name(),
             Provider::Startpage => Startpage::name(),
             Provider::Bing => Bing::name(),
+            Provider::Yahoo => Yahoo::name(),
+            Provider::Yandex => Yandex::name(),
         }
     }
 
@@ -534,6 +544,8 @@ impl Provider {
             Provider::Brave => run_provider::<Brave>(params).await,
             Provider::Startpage => run_provider::<Startpage>(params).await,
             Provider::Bing => run_provider::<Bing>(params).await,
+            Provider::Yahoo => run_provider::<Yahoo>(params).await,
+            Provider::Yandex => run_provider::<Yandex>(params).await,
         }
     }
 }

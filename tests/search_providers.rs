@@ -8,7 +8,8 @@
 use feroxyl::engine::{
     Bing, BingImages, Brave, DuckDuckGo, DuckDuckGoDefinitions, DuckDuckGoNews, Google,
     ImageResult, Provider, RankedSearchResult, SearchParams, SearchResult, Startpage,
-    StartpageImages, TimeRange, Unsplash, run_image_provider, run_meta_search, run_provider,
+    StartpageImages, TimeRange, Unsplash, Yahoo, Yandex, run_image_provider, run_meta_search,
+    run_provider,
 };
 
 fn default_params(query: &str) -> SearchParams {
@@ -180,6 +181,30 @@ async fn bing_search_returns_results() {
     let results = run_provider::<Bing>(&params)
         .await
         .expect("Bing search should succeed");
+
+    assert_valid_results(&results);
+}
+
+#[tokio::test]
+#[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
+async fn yahoo_search_returns_results() {
+    let params = default_params("rust programming");
+
+    let results = run_provider::<Yahoo>(&params)
+        .await
+        .expect("Yahoo search should succeed");
+
+    assert_valid_results(&results);
+}
+
+#[tokio::test]
+#[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
+async fn yandex_search_returns_results() {
+    let params = default_params("rust programming");
+
+    let results = run_provider::<Yandex>(&params)
+        .await
+        .expect("Yandex search should succeed");
 
     assert_valid_results(&results);
 }
