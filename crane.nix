@@ -45,7 +45,7 @@
           // {
             pname = "feroxyl";
             src = src;
-            CARGO_BUILD_TARGET = "aarch64-unknown-linux-musl";
+            CARGO_BUILD_TARGET = muslTargets.${pkgs.stdenv.system};
             CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
           }
         )
