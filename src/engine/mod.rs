@@ -15,14 +15,16 @@ mod ddg;
 mod google;
 mod google_images;
 mod startpage;
+mod startpage_images;
 
 pub use bing::Bing;
 pub use bing_images::BingImages;
-pub use google_images::GoogleImages;
 pub use brave::Brave;
 pub use ddg::DuckDuckGo;
 pub use google::Google;
+pub use google_images::GoogleImages;
 pub use startpage::Startpage;
+pub use startpage_images::StartpageImages;
 use tokio::task::JoinSet;
 
 /// Unified search result type for all providers
@@ -234,6 +236,7 @@ pub async fn run_provider<P: SearchProvider>(
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(3))
         .timeout(Duration::from_secs(5))
+        .cookie_store(true)
         .build()?;
 
     loop {
@@ -416,6 +419,7 @@ pub async fn run_image_provider<P: ImageSearchProvider>(
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(3))
         .timeout(Duration::from_secs(5))
+        .cookie_store(true)
         .build()?;
 
     loop {
@@ -526,6 +530,7 @@ impl Provider {
 pub enum ImageProvider {
     BingImages,
     GoogleImages,
+    StartpageImages,
 }
 
 /// Error when parsing an invalid image provider string.
@@ -540,6 +545,7 @@ impl std::str::FromStr for ImageProvider {
         match s.to_lowercase().as_str() {
             "bing_images" | "bing" => Ok(ImageProvider::BingImages),
             "google_images" | "google" => Ok(ImageProvider::GoogleImages),
+            "startpage_images" | "startpage" => Ok(ImageProvider::StartpageImages),
             other => Err(InvalidImageProvider(other.to_string())),
         }
     }
@@ -561,6 +567,7 @@ impl ImageProvider {
         match self {
             ImageProvider::BingImages => BingImages::name(),
             ImageProvider::GoogleImages => GoogleImages::name(),
+            ImageProvider::StartpageImages => StartpageImages::name(),
         }
     }
 
@@ -574,6 +581,7 @@ impl ImageProvider {
         match self {
             ImageProvider::BingImages => run_image_provider::<BingImages>(params).await,
             ImageProvider::GoogleImages => run_image_provider::<GoogleImages>(params).await,
+            ImageProvider::StartpageImages => run_image_provider::<StartpageImages>(params).await,
         }
     }
 }
