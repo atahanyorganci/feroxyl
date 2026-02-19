@@ -2,9 +2,11 @@
 //!
 //! Common parameters follow `SearXNG`'s `RequestParams` / `SearchQuery` model.
 
-use std::collections::HashMap;
-use std::error::Error;
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashMap,
+    error::Error,
+    time::{Duration, Instant},
+};
 
 mod bing;
 mod bing_images;
@@ -13,12 +15,13 @@ mod ddg;
 mod google;
 mod startpage;
 
+pub use bing::Bing;
+pub use bing_images::BingImages;
+pub use brave::Brave;
+pub use ddg::DuckDuckGo;
+pub use google::Google;
+pub use startpage::Startpage;
 use tokio::task::JoinSet;
-
-pub use {
-    bing::Bing, bing_images::BingImages, brave::Brave, ddg::DuckDuckGo, google::Google,
-    startpage::Startpage,
-};
 
 /// Unified search result type for all providers
 #[derive(Debug, Clone, serde::Serialize)]

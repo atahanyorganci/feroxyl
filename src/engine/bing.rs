@@ -2,13 +2,17 @@
 //!
 //! Port of `SearXNG`'s bing.py engine. Supports web search at <https://www.bing.com/search>
 
+use std::{
+    error::Error,
+    time::{SystemTime, UNIX_EPOCH},
+};
+
 use base64::Engine;
-use reqwest::Method;
-use reqwest::Url;
-use reqwest::header::{HeaderName, HeaderValue};
+use reqwest::{
+    header::{HeaderName, HeaderValue},
+    Method, Url,
+};
 use scraper::{ElementRef, Html, Selector};
-use std::error::Error;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::engine::{Locale, SearchParams, SearchProvider, SearchResult, TimeRange};
 

@@ -2,13 +2,17 @@
 //!
 //! Port of `SearXNG`'s google.py engine. Uses async/arc HTML format.
 
+use std::{
+    error::Error,
+    time::{Duration, Instant},
+};
+
 use rand::Rng;
-use reqwest::Method;
-use reqwest::Url;
-use reqwest::header::{HeaderName, HeaderValue};
+use reqwest::{
+    header::{HeaderName, HeaderValue},
+    Method, Url,
+};
 use scraper::{ElementRef, Html, Selector};
-use std::error::Error;
-use std::time::{Duration, Instant};
 
 use crate::engine::{Locale, Safesearch, SearchParams, SearchProvider, SearchResult, TimeRange};
 
@@ -185,7 +189,7 @@ impl Google {
         let invalidate = self.arc_id_prefix.is_none()
             || self
                 .arc_id_created_at
-                .is_none_or(|t| t.elapsed() > Duration::from_secs(3600));
+                .is_none_or(|t| t.elapsed() > Duration::from_hours(1));
 
         if invalidate {
             let mut rng = rand::rng();

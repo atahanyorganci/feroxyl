@@ -4,13 +4,14 @@
 //! Uses HTML scraping and requires fetching an sc-code from the homepage first
 //! to avoid bot detection. POSTs to <https://www.startpage.com/sp/search>
 
-use reqwest::Method;
-use reqwest::Url;
-use reqwest::header::{HeaderName, HeaderValue};
+use std::{collections::HashMap, error::Error};
+
+use reqwest::{
+    header::{HeaderName, HeaderValue},
+    Method, Url,
+};
 use scraper::{Html, Selector};
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::error::Error;
 
 use crate::engine::{Locale, Safesearch, SearchParams, SearchProvider, SearchResult, TimeRange};
 

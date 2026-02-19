@@ -5,10 +5,11 @@
 //!
 //! Run with: `cargo test --test api -- --ignored`
 
-use axum::body::Body;
-use axum::http::{Request, StatusCode};
-use feroxyl::api;
-use feroxyl::engine::ImageResult;
+use axum::{
+    body::Body,
+    http::{Request, StatusCode},
+};
+use feroxyl::{api, engine::ImageResult};
 use tower::ServiceExt;
 
 fn assert_valid_image_results(results: &[ImageResult]) {

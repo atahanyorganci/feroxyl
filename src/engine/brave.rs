@@ -3,11 +3,13 @@
 //! Port of `SearXNG`'s brave.py engine. Supports web search (category "search").
 //! Uses HTML scraping at <https://search.brave.com>
 
-use reqwest::Method;
-use reqwest::Url;
-use reqwest::header::{HeaderName, HeaderValue};
-use scraper::{ElementRef, Html, Selector};
 use std::error::Error;
+
+use reqwest::{
+    header::{HeaderName, HeaderValue},
+    Method, Url,
+};
+use scraper::{ElementRef, Html, Selector};
 
 use crate::engine::{Locale, Safesearch, SearchParams, SearchProvider, SearchResult, TimeRange};
 

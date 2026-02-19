@@ -1,5 +1,6 @@
-use feroxyl::api;
 use std::error::Error;
+
+use feroxyl::api;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]

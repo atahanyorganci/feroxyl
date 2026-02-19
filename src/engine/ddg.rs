@@ -3,11 +3,13 @@
 //! Port of `SearXNG`'s duckduckgo.py engine.
 //! Uses the HTML API at <https://html.duckduckgo.com/html>
 
-use reqwest::Method;
-use reqwest::header::{HeaderName, HeaderValue};
+use std::{collections::HashMap, error::Error};
+
+use reqwest::{
+    header::{HeaderName, HeaderValue},
+    Method,
+};
 use scraper::{Html, Selector};
-use std::collections::HashMap;
-use std::error::Error;
 
 use crate::engine::{Locale, SearchParams, SearchResult, TimeRange};
 

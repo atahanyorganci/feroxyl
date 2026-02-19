@@ -3,11 +3,13 @@
 //! Port of `SearXNG`'s `bing_images.py` engine.
 //! Uses the HTML API at <https://www.bing.com/images/async>
 
-use reqwest::Method;
-use reqwest::Url;
-use reqwest::header::{HeaderName, HeaderValue};
-use scraper::{Html, Selector};
 use std::error::Error;
+
+use reqwest::{
+    header::{HeaderName, HeaderValue},
+    Method, Url,
+};
+use scraper::{Html, Selector};
 
 use crate::engine::{ImageResult, ImageSearchProvider, Locale, SearchParams, TimeRange};
 
