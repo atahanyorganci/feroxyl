@@ -2,7 +2,10 @@
 //!
 //! Exposed for integration testing and server setup.
 
-use crate::engine::{run_meta_search, Provider, RankedSearchResult, SearchParams};
+use crate::engine::{
+    run_image_provider, run_meta_search, BingImages, ImageResult, Provider, RankedSearchResult,
+    SearchParams,
+};
 use axum::{
     extract::{Path, Query},
     http::{header, StatusCode},
@@ -65,6 +68,16 @@ struct SearchQuery {
     providers: Vec<Provider>,
 }
 
+#[derive(serde::Deserialize)]
+struct ImageSearchQuery {
+    #[serde(rename = "q")]
+    query: String,
+    #[serde(default)]
+    time_range: crate::engine::TimeRange,
+    #[serde(default)]
+    locale: crate::engine::Locale,
+}
+
 #[tracing::instrument(skip_all, fields(query = %query, safesearch = ?safesearch, time_range = ?time_range, locale = %locale))]
 async fn search(
     Query(SearchQuery {
@@ -94,6 +107,34 @@ async fn search(
         }
         Err(e) => {
             tracing::error!(error = %e, "Meta search failed");
+            Vec::new()
+        }
+    };
+    Json(results)
+}
+
+#[tracing::instrument(skip_all, fields(query = %query, time_range = ?time_range, locale = %locale))]
+async fn search_image(
+    Query(ImageSearchQuery {
+        query,
+        time_range,
+        locale,
+    }): Query<ImageSearchQuery>,
+) -> Json<Vec<ImageResult>> {
+    let params = SearchParams {
+        query: query.clone(),
+        safesearch: crate::engine::Safesearch::default(),
+        time_range,
+        locale,
+    };
+    tracing::info!("Starting image search");
+    let results = match run_image_provider::<BingImages>(&params).await {
+        Ok(r) => {
+            tracing::info!(count = r.len(), "Image search completed");
+            r
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Image search failed");
             Vec::new()
         }
     };
@@ -155,6 +196,7 @@ async fn scrape(Path(path): Path<String>) -> impl IntoResponse {
 pub fn create_app() -> Router<()> {
     Router::new()
         .route("/search", get(search))
+        .route("/search/image", get(search_image))
         .route("/scrape/*path", get(scrape))
         .layer(TraceLayer::new_for_http())
 }

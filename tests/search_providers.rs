@@ -6,8 +6,8 @@
 //! Run with: `cargo test --test search_providers -- --ignored`
 
 use feroxyl::engine::{
-    run_meta_search, run_provider, Bing, Brave, DuckDuckGo, Google, Provider, RankedSearchResult,
-    SearchParams, SearchResult, Startpage, TimeRange,
+    run_image_provider, run_meta_search, run_provider, Bing, BingImages, Brave, DuckDuckGo, Google,
+    ImageResult, Provider, RankedSearchResult, SearchParams, SearchResult, Startpage, TimeRange,
 };
 
 fn default_params(query: &str) -> SearchParams {
@@ -39,6 +39,25 @@ fn assert_valid_results(results: &[SearchResult]) {
         assert!(!r.title.is_empty(), "result title should not be empty");
         assert!(!r.url.is_empty(), "result url should not be empty");
         assert!(r.url.starts_with("http"), "result url should be absolute");
+    }
+}
+
+fn assert_valid_image_results(results: &[ImageResult]) {
+    assert!(!results.is_empty(), "expected at least one image result");
+    for r in results {
+        assert!(!r.url.is_empty(), "image result url should not be empty");
+        assert!(
+            r.url.starts_with("http"),
+            "image result url should be absolute"
+        );
+        assert!(
+            !r.img_src.is_empty(),
+            "image result img_src should not be empty"
+        );
+        assert!(
+            r.img_src.starts_with("http"),
+            "image result img_src should be absolute"
+        );
     }
 }
 
@@ -138,6 +157,18 @@ async fn bing_search_returns_results() {
         .expect("Bing search should succeed");
 
     assert_valid_results(&results);
+}
+
+#[tokio::test]
+#[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
+async fn bing_images_search_returns_results() {
+    let params = default_params("rust logo");
+
+    let results = run_image_provider::<BingImages>(&params)
+        .await
+        .expect("Bing Images search should succeed");
+
+    assert_valid_image_results(&results);
 }
 
 #[tokio::test]

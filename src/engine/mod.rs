@@ -7,6 +7,7 @@ use std::error::Error;
 use std::time::{Duration, Instant};
 
 mod bing;
+mod bing_images;
 mod brave;
 mod ddg;
 mod google;
@@ -14,7 +15,10 @@ mod startpage;
 
 use tokio::task::JoinSet;
 
-pub use {bing::Bing, brave::Brave, ddg::DuckDuckGo, google::Google, startpage::Startpage};
+pub use {
+    bing::Bing, bing_images::BingImages, brave::Brave, ddg::DuckDuckGo, google::Google,
+    startpage::Startpage,
+};
 
 /// Unified search result type for all providers
 #[derive(Debug, Clone, serde::Serialize)]
@@ -22,6 +26,33 @@ pub struct SearchResult {
     pub title: String,
     pub url: String,
     pub content: Option<String>,
+}
+
+/// Image search result type for image providers.
+/// Mirrors SearXNG's images.html template schema used by bing_images, google_images,
+/// duckduckgo_extra, brave, etc.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ImageResult {
+    /// URL to the source page where the image is hosted.
+    pub url: String,
+    /// Full-size image URL (the actual image to display/download).
+    pub img_src: String,
+    /// Thumbnail URL for grid display. Falls back to `img_src` when absent.
+    pub thumbnail_src: Option<String>,
+    /// Image title or caption.
+    pub title: String,
+    /// Optional description or alt text.
+    pub content: Option<String>,
+    /// Source name (e.g. site name, domain).
+    pub source: Option<String>,
+    /// Resolution string (e.g. "1920 x 1080").
+    pub resolution: Option<String>,
+    /// Image format (e.g. "PNG", "JPEG").
+    pub img_format: Option<String>,
+    /// File size string (e.g. "1.2 MB").
+    pub filesize: Option<String>,
+    /// Creator or author.
+    pub author: Option<String>,
 }
 
 /// Time range filter for search results (SearXNG: time_range).
@@ -291,6 +322,70 @@ where
 
     /// Yield the next result. None when no more results; caller loops back to build_request.
     fn results(&mut self) -> Option<Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>>>;
+}
+
+/// Trait for image search providers. Same state-machine flow as SearchProvider but yields ImageResult.
+pub trait ImageSearchProvider
+where
+    Self: Default,
+{
+    fn name() -> &'static str;
+
+    fn build_request(
+        &mut self,
+        params: &SearchParams,
+    ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>>;
+
+    fn parse_response(&mut self, body: &str) -> Result<(), Box<dyn Error + Send + Sync>>;
+
+    fn results(&mut self) -> Option<Result<Vec<ImageResult>, Box<dyn Error + Send + Sync>>>;
+}
+
+/// Runs an image search provider until completion.
+#[tracing::instrument(skip(params), fields(provider = P::name(), query = %params.query))]
+pub async fn run_image_provider<P: ImageSearchProvider>(
+    params: &SearchParams,
+) -> Result<Vec<ImageResult>, Box<dyn Error + Send + Sync>> {
+    let start = Instant::now();
+    let mut provider = P::default();
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(3))
+        .timeout(Duration::from_secs(5))
+        .build()?;
+
+    loop {
+        tracing::debug!(provider = P::name(), "Building request");
+        let request = provider.build_request(params)?;
+        let response = client.execute(request).await?;
+        let status = response.status();
+        let body = response.text().await?;
+        tracing::debug!(status = %status, body_len = body.len(), "Received response");
+        provider.parse_response(&body)?;
+
+        match provider.results() {
+            Some(Ok(results)) => {
+                let elapsed = start.elapsed();
+                tracing::info!(
+                    provider = P::name(),
+                    count = results.len(),
+                    elapsed_ms = elapsed.as_millis(),
+                    "Image provider completed"
+                );
+                break Ok(results);
+            }
+            Some(Err(e)) => {
+                let elapsed = start.elapsed();
+                tracing::error!(
+                    provider = P::name(),
+                    error = %e,
+                    elapsed_ms = elapsed.as_millis(),
+                    "Image provider failed"
+                );
+                return Err(e);
+            }
+            None => {}
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
