@@ -17,7 +17,7 @@
         toolchain:
           toolchain.default.override {
             extensions = ["rust-src" "rustfmt"];
-            targets = [ muslTargets.${p.stdenv.system} ];
+            targets = [muslTargets.${p.stdenv.system}];
           }
       );
     rustToolchain = rustToolchainFor pkgs;
