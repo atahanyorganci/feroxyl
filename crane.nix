@@ -6,11 +6,18 @@
     ...
   }: let
     inherit (pkgs) lib;
+    muslTargets = {
+      "aarch64-darwin" = "aarch64-apple-darwin";
+      "x86_64-darwin" = "x86_64-apple-darwin";
+      "x86_64-linux" = "x86_64-unknown-linux-musl";
+      "aarch64-linux" = "aarch64-unknown-linux-musl";
+    };
     rustToolchainFor = p:
       p.rust-bin.selectLatestNightlyWith (
         toolchain:
           toolchain.default.override {
             extensions = ["rust-src" "rustfmt"];
+            targets = [ muslTargets.${p.stdenv.system} ];
           }
       );
     rustToolchain = rustToolchainFor pkgs;
@@ -29,13 +36,27 @@
         inherit (craneLibNightly.crateNameFromCargoToml {inherit src;}) version;
         doCheck = false;
       };
-    feroxyl = craneLibNightly.buildPackage (
-      individualCrateArgs
-      // {
-        pname = "feroxyl";
-        src = src;
-      }
-    );
+
+    feroxyl =
+      if pkgs.stdenv.isLinux
+      then
+        craneLibNightly.buildPackage (
+          individualCrateArgs
+          // {
+            pname = "feroxyl";
+            src = src;
+            CARGO_BUILD_TARGET = "aarch64-unknown-linux-musl";
+            CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
+          }
+        )
+      else
+        craneLibNightly.buildPackage (
+          individualCrateArgs
+          // {
+            pname = "feroxyl";
+            src = src;
+          }
+        );
   in {
     packages.feroxyl = feroxyl;
     devShells.default = craneLibNightly.devShell {
