@@ -13,10 +13,12 @@ mod bing_images;
 mod brave;
 mod ddg;
 mod google;
+mod google_images;
 mod startpage;
 
 pub use bing::Bing;
 pub use bing_images::BingImages;
+pub use google_images::GoogleImages;
 pub use brave::Brave;
 pub use ddg::DuckDuckGo;
 pub use google::Google;
@@ -523,6 +525,7 @@ impl Provider {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageProvider {
     BingImages,
+    GoogleImages,
 }
 
 /// Error when parsing an invalid image provider string.
@@ -536,6 +539,7 @@ impl std::str::FromStr for ImageProvider {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "bing_images" | "bing" => Ok(ImageProvider::BingImages),
+            "google_images" | "google" => Ok(ImageProvider::GoogleImages),
             other => Err(InvalidImageProvider(other.to_string())),
         }
     }
@@ -556,6 +560,7 @@ impl ImageProvider {
     pub fn name(&self) -> &'static str {
         match self {
             ImageProvider::BingImages => BingImages::name(),
+            ImageProvider::GoogleImages => GoogleImages::name(),
         }
     }
 
@@ -568,6 +573,7 @@ impl ImageProvider {
     ) -> Result<Vec<ImageResult>, Box<dyn Error + Send + Sync>> {
         match self {
             ImageProvider::BingImages => run_image_provider::<BingImages>(params).await,
+            ImageProvider::GoogleImages => run_image_provider::<GoogleImages>(params).await,
         }
     }
 }

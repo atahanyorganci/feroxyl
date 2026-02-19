@@ -27,7 +27,8 @@ const DEFAULT_PROVIDERS: &[Provider] = &[
     Provider::Startpage,
 ];
 
-const DEFAULT_IMAGE_PROVIDERS: &[ImageProvider] = &[ImageProvider::BingImages];
+const DEFAULT_IMAGE_PROVIDERS: &[ImageProvider] =
+    &[ImageProvider::BingImages, ImageProvider::GoogleImages];
 
 fn deserialize_providers<'de, D>(deserializer: D) -> Result<Vec<Provider>, D::Error>
 where

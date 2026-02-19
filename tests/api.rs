@@ -66,3 +66,26 @@ async fn search_image_endpoint_returns_results() {
 
     assert_valid_image_results(&results);
 }
+
+#[tokio::test]
+#[ignore = "requires network access; run with: cargo test --test api -- --ignored"]
+async fn search_image_google_images_returns_results() {
+    let app = api::create_app();
+
+    let request = Request::builder()
+        .uri("/search/image?q=rust%20logo&provider=google_images")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let results: Vec<RankedImageResult> =
+        serde_json::from_slice(&body).expect("valid JSON response");
+
+    assert_valid_image_results(&results);
+}
