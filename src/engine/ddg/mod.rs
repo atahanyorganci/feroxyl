@@ -1,10 +1,12 @@
-//! `DuckDuckGo` search engines (web, news).
+//! `DuckDuckGo` search engines (web, news, definitions).
 //!
 //! Shared utilities and re-exports for `DuckDuckGo` implementations.
 
+mod definitions;
 mod news;
 mod web;
 
+pub use definitions::DuckDuckGoDefinitions;
 pub use news::DuckDuckGoNews;
 use reqwest::{
     Method,

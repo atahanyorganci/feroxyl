@@ -6,9 +6,9 @@
 //! Run with: `cargo test --test search_providers -- --ignored`
 
 use feroxyl::engine::{
-    Bing, BingImages, Brave, DuckDuckGo, DuckDuckGoNews, Google, ImageResult, Provider,
-    RankedSearchResult, SearchParams, SearchResult, Startpage, StartpageImages, TimeRange,
-    Unsplash, run_image_provider, run_meta_search, run_provider,
+    Bing, BingImages, Brave, DuckDuckGo, DuckDuckGoDefinitions, DuckDuckGoNews, Google,
+    ImageResult, Provider, RankedSearchResult, SearchParams, SearchResult, Startpage,
+    StartpageImages, TimeRange, Unsplash, run_image_provider, run_meta_search, run_provider,
 };
 
 fn default_params(query: &str) -> SearchParams {
@@ -97,6 +97,18 @@ async fn meta_search_returns_merged_results() {
             "results should be sorted by score"
         );
     }
+}
+
+#[tokio::test]
+#[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
+async fn duckduckgo_definitions_search_returns_results() {
+    let params = default_params("rust programming language");
+
+    let results = run_provider::<DuckDuckGoDefinitions>(&params)
+        .await
+        .expect("DuckDuckGo Definitions search should succeed");
+
+    assert_valid_results(&results);
 }
 
 #[tokio::test]

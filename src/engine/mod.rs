@@ -23,7 +23,7 @@ mod unsplash;
 pub use bing::Bing;
 pub use bing_images::BingImages;
 pub use brave::Brave;
-pub use ddg::{DuckDuckGo, DuckDuckGoNews};
+pub use ddg::{DuckDuckGo, DuckDuckGoDefinitions, DuckDuckGoNews};
 pub use google::Google;
 pub use google_images::GoogleImages;
 pub use startpage::Startpage;
@@ -463,6 +463,7 @@ pub async fn run_image_provider<P: ImageSearchProvider>(
 #[derive(Debug, Clone, Copy)]
 pub enum Provider {
     DuckDuckGo,
+    DuckDuckGoDefinitions,
     DuckDuckGoNews,
     Google,
     Brave,
@@ -481,6 +482,9 @@ impl std::str::FromStr for Provider {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "duckduckgo" | "ddg" => Ok(Provider::DuckDuckGo),
+            "duckduckgo_definitions" | "ddg_definitions" | "ddg_def" => {
+                Ok(Provider::DuckDuckGoDefinitions)
+            }
             "duckduckgo_news" | "ddg_news" | "ddn" => Ok(Provider::DuckDuckGoNews),
             "google" => Ok(Provider::Google),
             "brave" => Ok(Provider::Brave),
@@ -506,6 +510,7 @@ impl Provider {
     pub fn name(&self) -> &'static str {
         match self {
             Provider::DuckDuckGo => DuckDuckGo::name(),
+            Provider::DuckDuckGoDefinitions => DuckDuckGoDefinitions::name(),
             Provider::DuckDuckGoNews => DuckDuckGoNews::name(),
             Provider::Google => Google::name(),
             Provider::Brave => Brave::name(),
@@ -523,6 +528,7 @@ impl Provider {
     ) -> Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>> {
         match self {
             Provider::DuckDuckGo => run_provider::<DuckDuckGo>(params).await,
+            Provider::DuckDuckGoDefinitions => run_provider::<DuckDuckGoDefinitions>(params).await,
             Provider::DuckDuckGoNews => run_provider::<DuckDuckGoNews>(params).await,
             Provider::Google => run_provider::<Google>(params).await,
             Provider::Brave => run_provider::<Brave>(params).await,
