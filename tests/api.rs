@@ -32,6 +32,31 @@ fn assert_valid_image_results(results: &[RankedImageResult]) {
 }
 
 #[tokio::test]
+async fn index_returns_html() {
+    let app = api::create_app();
+
+    let request = Request::builder().uri("/").body(Body::empty()).unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+        Some("text/html; charset=utf-8")
+    );
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let html = std::str::from_utf8(&body).unwrap();
+    assert!(html.contains("<title>Feroxyl</title>"));
+    assert!(html.contains("<main>"));
+}
+
+#[tokio::test]
 async fn search_image_endpoint_returns_200_with_query() {
     let app = api::create_app();
 

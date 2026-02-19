@@ -4,11 +4,13 @@
 
 use axum::{
     Json, Router,
+    body::Body,
     extract::{Path, Query},
     http::{StatusCode, header},
     response::IntoResponse,
     routing::get,
 };
+use markup::Render;
 use reqwest::{
     Method, Url,
     header::{HeaderName, HeaderValue},
@@ -245,9 +247,32 @@ async fn scrape(Path(path): Path<String>) -> impl IntoResponse {
     }
 }
 
-/// Creates the application router. Uses `()` as state since handlers create their own HTTP clients.
+async fn index() -> impl IntoResponse {
+    let template = markup::new! {
+        @markup::doctype()
+        html {
+            head {
+                title { "Feroxyl" }
+            }
+            body {
+                main {
+                    h1 { "Feroxyl" }
+                }
+            }
+        }
+    };
+    let mut buf = String::new();
+    template.render(&mut buf).expect("markup render");
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        Body::from(buf),
+    )
+}
+
 pub fn create_app() -> Router<()> {
     Router::new()
+        .route("/", get(index))
         .route("/search", get(search))
         .route("/search/image", get(search_image))
         .route("/scrape/*path", get(scrape))

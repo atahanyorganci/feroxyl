@@ -357,6 +357,7 @@ dependencies = [
  "axum",
  "base64",
  "html5ever 0.38.0",
+ "markup",
  "markup5ever_rcdom",
  "rand",
  "reqwest",
@@ -794,6 +795,26 @@ name = "mac"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c41e0c4fef86961ac6d6f8a82609f55f31b05e4fce149ac5710e439df7619ba4"
+
+[[package]]
+name = "markup"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be10fa8085360758d551c6577b0692c9e7614d2d743036cf2fa452476a3e0569"
+dependencies = [
+ "markup-proc-macro",
+]
+
+[[package]]
+name = "markup-proc-macro"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee486981a2fe832d4deb4d23a35508c111ef7070758177ce3580eb2a384fab2f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "markup5ever"
