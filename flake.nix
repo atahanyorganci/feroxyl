@@ -43,9 +43,7 @@
             allowBroken = true;
           };
         };
-        craneLib = (self.inputs.crane.mkLib pkgs).overrideToolchain (
-          p: p.rust-bin.nightly.latest.default.override {}
-        );
+        craneLib = self.inputs.crane.mkLib pkgs;
       in {
         _module.args = {
           inherit pkgs craneLib;
