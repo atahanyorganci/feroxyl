@@ -29,5 +29,11 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 urlencoding = "2"
 
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
 [dev-dependencies]
 tower = "0.5"
