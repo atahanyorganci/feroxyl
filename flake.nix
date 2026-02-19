@@ -37,7 +37,7 @@
       }: let
         pkgs = import self.inputs.nixpkgs {
           inherit system;
-          overlays = [(import self.inputs.rust-overlay)];
+          overlays = [self.inputs.rust-overlay.overlays.default];
           config = {
             allowUnfree = true;
             allowBroken = true;

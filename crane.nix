@@ -42,7 +42,6 @@
       checks = self'.checks;
       packages = [rustToolchain];
       RUST_SRC_PATH = "${rustToolchain.passthru.availableComponents.rust-src}/lib/rustlib/src/rust/library";
-      DYLD_LIBRARY_PATH = "${rustToolchain.passthru.availableComponents.rustc}/lib";
     };
   };
 }
