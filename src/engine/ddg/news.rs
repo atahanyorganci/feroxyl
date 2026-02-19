@@ -12,10 +12,9 @@ use reqwest::{
 use scraper::Html;
 use serde::Deserialize;
 
-use super::ddg::{extr, locale_to_ddg_region};
+use super::{build_vqd_request, extr, locale_to_ddg_region};
 use crate::engine::{Safesearch, SearchParams, SearchResult};
 
-const DDG_SEARCH_URL: &str = "https://duckduckgo.com/";
 const DDG_NEWS_URL: &str = "https://duckduckgo.com/news.js";
 
 /// Strips HTML tags from a string (e.g. excerpt) to plain text.
@@ -84,28 +83,6 @@ impl Default for DuckDuckGoNews {
 }
 
 impl DuckDuckGoNews {
-    fn build_vqd_request(
-        params: &SearchParams,
-    ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
-        let query_string = serde_urlencoded::to_string([("q", params.query.as_str())])
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
-        let url = format!("{DDG_SEARCH_URL}?{query_string}");
-        let url = reqwest::Url::parse(&url).map_err(|e| std::io::Error::other(e.to_string()))?;
-        let mut request = reqwest::Request::new(Method::GET, url);
-        let headers = request.headers_mut();
-        headers.insert(
-            HeaderName::from_static("accept-language"),
-            HeaderValue::from_static("en-US,en;q=0.9"),
-        );
-        headers.insert(
-            HeaderName::from_static("user-agent"),
-            HeaderValue::from_static(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            ),
-        );
-        Ok(request)
-    }
-
     fn build_news_request(
         &self,
         params: &SearchParams,
@@ -198,7 +175,7 @@ impl crate::engine::SearchProvider for DuckDuckGoNews {
 
         match self.phase {
             DdgNewsPhase::NeedVqd => {
-                let req = Self::build_vqd_request(params)?;
+                let req = build_vqd_request(params)?;
                 Ok(req)
             }
             DdgNewsPhase::NeedSearch => {

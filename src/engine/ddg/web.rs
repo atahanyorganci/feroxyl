@@ -11,21 +11,10 @@ use reqwest::{
 };
 use scraper::{Html, Selector};
 
-use crate::engine::{Locale, SearchParams, SearchResult, TimeRange};
+use super::{build_vqd_request, extr, locale_to_ddg_region};
+use crate::engine::{SearchParams, SearchResult, TimeRange};
 
 const BASE_URL: &str = "https://html.duckduckgo.com/html/";
-const DDG_SEARCH_URL: &str = "https://duckduckgo.com/";
-
-/// `DuckDuckGo` region code from Locale: All -> "wt-wt"; otherwise lowercased with hyphens.
-pub(crate) fn locale_to_ddg_region(locale: &Locale) -> String {
-    match locale {
-        Locale::All => "wt-wt".to_string(),
-        Locale::EnUS => "en-us".to_string(),
-        Locale::EnGB => "en-gb".to_string(),
-        Locale::TrTR => "tr-tr".to_string(),
-        Locale::Other(s) => s.to_lowercase().replace('_', "-"),
-    }
-}
 
 fn time_range_to_ddg_code(tr: TimeRange) -> &'static str {
     match tr {
@@ -49,14 +38,6 @@ pub struct DuckDuckGoResult {
 #[derive(Debug, Clone)]
 pub struct DuckDuckGoResponse {
     pub results: Vec<DuckDuckGoResult>,
-}
-
-/// Extracts text between `begin` and `end` in `txt`
-pub(crate) fn extr(txt: &str, begin: &str, end: &str) -> Option<String> {
-    let start_idx = txt.find(begin)?;
-    let after_begin = start_idx + begin.len();
-    let end_idx = txt[after_begin..].find(end)?;
-    Some(txt[after_begin..after_begin + end_idx].to_string())
 }
 
 /// Builds the form data for the `DuckDuckGo` POST request
@@ -108,7 +89,7 @@ fn is_captcha(doc: &Html) -> bool {
 }
 
 /// Parses the HTML response from `DuckDuckGo`
-pub fn parse_response(html: &str) -> Result<DuckDuckGoResponse, Box<dyn Error>> {
+fn parse_response(html: &str) -> Result<DuckDuckGoResponse, Box<dyn Error>> {
     let doc = Html::parse_document(html);
 
     if is_captcha(&doc) {
@@ -188,28 +169,6 @@ impl Default for DuckDuckGo {
 }
 
 impl DuckDuckGo {
-    fn build_vqd_request(
-        params: &SearchParams,
-    ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
-        let query_string = serde_urlencoded::to_string([("q", params.query.as_str())])
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
-        let url = format!("{DDG_SEARCH_URL}?{query_string}");
-        let url = reqwest::Url::parse(&url).map_err(|e| std::io::Error::other(e.to_string()))?;
-        let mut request = reqwest::Request::new(Method::GET, url);
-        let headers = request.headers_mut();
-        headers.insert(
-            HeaderName::from_static("accept-language"),
-            HeaderValue::from_static("en-US,en;q=0.9"),
-        );
-        headers.insert(
-            HeaderName::from_static("user-agent"),
-            HeaderValue::from_static(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            ),
-        );
-        Ok(request)
-    }
-
     fn build_search_request(
         &self,
         params: &SearchParams,
@@ -292,7 +251,7 @@ impl crate::engine::SearchProvider for DuckDuckGo {
 
         match self.phase {
             DdgPhase::NeedVqd => {
-                let req = Self::build_vqd_request(params)?;
+                let req = build_vqd_request(params)?;
                 Ok(req)
             }
             DdgPhase::NeedSearch => {

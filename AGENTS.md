@@ -25,7 +25,10 @@ feroxyl/
 │   ├── scrape.rs           # HTML to Markdown conversion
 │   └── engine/
 │       ├── mod.rs          # SearchProvider, ImageSearchProvider, SearchResult, Provider enum
-│       ├── ddg.rs          # DuckDuckGo HTML search
+│       ├── ddg/
+│       │   ├── mod.rs      # Shared DDG utilities (extr, locale_to_ddg_region, build_vqd_request)
+│       │   ├── web.rs      # DuckDuckGo HTML search
+│       │   └── news.rs    # DuckDuckGo news search
 │       ├── google.rs       # Google search (HTML scraping)
 │       ├── brave.rs        # Brave search
 │       ├── startpage.rs    # Startpage search
@@ -43,7 +46,9 @@ feroxyl/
 | File                        | Purpose                                                                               |
 | --------------------------- | ------------------------------------------------------------------------------------- |
 | `src/engine/mod.rs`         | Defines `SearchProvider`, `ImageSearchProvider`, `SearchResult`, `Provider` enum.     |
-| `src/engine/ddg.rs`         | DuckDuckGo implementation; VQD token flow, pagination, time range filters.            |
+| `src/engine/ddg/mod.rs`     | Shared DDG utilities: `extr`, `locale_to_ddg_region`, `build_vqd_request`.            |
+| `src/engine/ddg/web.rs`     | DuckDuckGo web search; VQD token flow, pagination, time range filters.                |
+| `src/engine/ddg/news.rs`    | DuckDuckGo news search; JSON API at news.js.                                          |
 | `src/engine/google.rs`      | Google implementation; parses async/arc HTML format.                                  |
 | `src/engine/brave.rs`       | Brave search implementation.                                                          |
 | `src/engine/startpage.rs`   | Startpage search implementation.                                                      |
