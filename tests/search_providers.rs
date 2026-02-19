@@ -7,8 +7,8 @@
 
 use feroxyl::engine::{
     Bing, BingImages, Brave, DuckDuckGo, Google, ImageResult, Provider, RankedSearchResult,
-    SearchParams, SearchResult, Startpage, StartpageImages, TimeRange, run_image_provider,
-    run_meta_search, run_provider,
+    SearchParams, SearchResult, Startpage, StartpageImages, TimeRange, Unsplash,
+    run_image_provider, run_meta_search, run_provider,
 };
 
 fn default_params(query: &str) -> SearchParams {
@@ -180,6 +180,18 @@ async fn startpage_images_search_returns_results() {
     let results = run_image_provider::<StartpageImages>(&params)
         .await
         .expect("Startpage Images search should succeed");
+
+    assert_valid_image_results(&results);
+}
+
+#[tokio::test]
+#[ignore = "requires network access; run with: cargo test --test search_providers -- --ignored"]
+async fn unsplash_search_returns_results() {
+    let params = default_params("rust logo");
+
+    let results = run_image_provider::<Unsplash>(&params)
+        .await
+        .expect("Unsplash search should succeed");
 
     assert_valid_image_results(&results);
 }

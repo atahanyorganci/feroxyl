@@ -18,6 +18,7 @@ mod google;
 mod google_images;
 mod startpage;
 mod startpage_images;
+mod unsplash;
 
 pub use bing::Bing;
 pub use bing_images::BingImages;
@@ -27,6 +28,7 @@ pub use google::Google;
 pub use google_images::GoogleImages;
 pub use startpage::Startpage;
 pub use startpage_images::StartpageImages;
+pub use unsplash::Unsplash;
 
 /// Unified search result type for all providers
 #[derive(Debug, Clone, serde::Serialize)]
@@ -532,6 +534,7 @@ pub enum ImageProvider {
     BingImages,
     GoogleImages,
     StartpageImages,
+    Unsplash,
 }
 
 /// Error when parsing an invalid image provider string.
@@ -547,6 +550,7 @@ impl std::str::FromStr for ImageProvider {
             "bing_images" | "bing" => Ok(ImageProvider::BingImages),
             "google_images" | "google" => Ok(ImageProvider::GoogleImages),
             "startpage_images" | "startpage" => Ok(ImageProvider::StartpageImages),
+            "unsplash" => Ok(ImageProvider::Unsplash),
             other => Err(InvalidImageProvider(other.to_string())),
         }
     }
@@ -569,6 +573,7 @@ impl ImageProvider {
             ImageProvider::BingImages => BingImages::name(),
             ImageProvider::GoogleImages => GoogleImages::name(),
             ImageProvider::StartpageImages => StartpageImages::name(),
+            ImageProvider::Unsplash => Unsplash::name(),
         }
     }
 
@@ -583,6 +588,7 @@ impl ImageProvider {
             ImageProvider::BingImages => run_image_provider::<BingImages>(params).await,
             ImageProvider::GoogleImages => run_image_provider::<GoogleImages>(params).await,
             ImageProvider::StartpageImages => run_image_provider::<StartpageImages>(params).await,
+            ImageProvider::Unsplash => run_image_provider::<Unsplash>(params).await,
         }
     }
 }
