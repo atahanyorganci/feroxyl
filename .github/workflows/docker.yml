@@ -1,0 +1,55 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: DeterminateSystems/determinate-nix-action@v3
+
+      - name: Build Docker image
+        run: nix build ".#packages.x86_64-linux.feroxyl-image"
+
+      - name: Load image into Docker
+        run: |
+          if [ -f result ]; then
+            docker load < result
+          else
+            docker load < "$(find result -name "*.tar.gz" -print -quit)"
+          fi
+
+      - name: Get image tag
+        id: image
+        run: |
+          TAG=$(docker images feroxyl --format "{{.Tag}}" | head -1)
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Loaded image feroxyl:$TAG"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and push
+        run: |
+          IMAGE="ghcr.io/${{ github.repository }}"
+          docker tag "feroxyl:${{ steps.image.outputs.tag }}" "${IMAGE}:${{ github.sha }}"
+          docker tag "feroxyl:${{ steps.image.outputs.tag }}" "${IMAGE}:latest"
+          docker push "${IMAGE}:${{ github.sha }}"
+          docker push "${IMAGE}:latest"
