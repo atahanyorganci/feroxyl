@@ -6,9 +6,9 @@
 //! Run with: `cargo test --test search_providers -- --ignored`
 
 use feroxyl::engine::{
-    run_image_provider, run_meta_search, run_provider, Bing, BingImages, Brave, DuckDuckGo, Google,
-    ImageResult, Provider, RankedSearchResult, SearchParams, SearchResult, Startpage, StartpageImages,
-    TimeRange,
+    Bing, BingImages, Brave, DuckDuckGo, Google, ImageResult, Provider, RankedSearchResult,
+    SearchParams, SearchResult, Startpage, StartpageImages, TimeRange, run_image_provider,
+    run_meta_search, run_provider,
 };
 
 fn default_params(query: &str) -> SearchParams {

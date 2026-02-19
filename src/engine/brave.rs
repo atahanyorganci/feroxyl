@@ -6,8 +6,8 @@
 use std::error::Error;
 
 use reqwest::{
-    header::{HeaderName, HeaderValue},
     Method, Url,
+    header::{HeaderName, HeaderValue},
 };
 use scraper::{ElementRef, Html, Selector};
 
@@ -109,18 +109,16 @@ fn parse_search_response(html: &str) -> Vec<SearchResult> {
                 let mut text = extract_text(el);
                 // Strip published date from content if present (span.t-secondary)
                 let t_secondary = Selector::parse("span[class*=\"t-secondary\"]").ok();
-                if let Some(sel) = t_secondary {
-                    if let Some(span) = el.select(&sel).next() {
-                        let pub_text = extract_text(span);
-                        if !pub_text.is_empty() {
-                            text = text
-                                .strip_prefix(&pub_text)
-                                .unwrap_or(&text)
-                                .trim_start_matches(|c| {
-                                    c == '-' || c == ' ' || c == '\n' || c == '\t'
-                                })
-                                .to_string();
-                        }
+                if let Some(sel) = t_secondary
+                    && let Some(span) = el.select(&sel).next()
+                {
+                    let pub_text = extract_text(span);
+                    if !pub_text.is_empty() {
+                        text = text
+                            .strip_prefix(&pub_text)
+                            .unwrap_or(&text)
+                            .trim_start_matches(['-', ' ', '\n', '\t'])
+                            .to_string();
                     }
                 }
                 text

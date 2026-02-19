@@ -6,8 +6,8 @@
 use std::error::Error;
 
 use reqwest::{
-    header::{HeaderName, HeaderValue},
     Method, Url,
+    header::{HeaderName, HeaderValue},
 };
 use scraper::{Html, Selector};
 

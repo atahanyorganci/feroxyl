@@ -6,8 +6,8 @@
 use std::error::Error;
 
 use reqwest::{
-    header::{HeaderName, HeaderValue},
     Method, Url,
+    header::{HeaderName, HeaderValue},
 };
 
 use crate::engine::{
@@ -82,13 +82,14 @@ fn build_source(
         .and_then(serde_json::Value::as_str)
         .unwrap_or("");
     let mut source = site_title.to_string();
-    if let Some(iptc) = result_obj.get("iptc").and_then(|i| i.as_object()) {
-        if let Some(cn) = iptc.get("copyright_notice").and_then(serde_json::Value::as_str) {
-            if !cn.is_empty() {
-                source.push_str(" | ");
-                source.push_str(cn);
-            }
-        }
+    if let Some(iptc) = result_obj.get("iptc").and_then(|i| i.as_object())
+        && let Some(cn) = iptc
+            .get("copyright_notice")
+            .and_then(serde_json::Value::as_str)
+        && !cn.is_empty()
+    {
+        source.push_str(" | ");
+        source.push_str(cn);
     }
     let freshness = result_obj
         .get("freshness_date")
@@ -102,12 +103,12 @@ fn build_source(
         .get("file_size")
         .and_then(serde_json::Value::as_str)
         .map(str::to_string);
-    if let Some(ref fs) = &file_size {
-        if !fs.is_empty() {
-            source.push_str(" (");
-            source.push_str(fs);
-            source.push(')');
-        }
+    if let Some(fs) = &file_size
+        && !fs.is_empty()
+    {
+        source.push_str(" (");
+        source.push_str(fs);
+        source.push(')');
     }
     let source = if source.is_empty() {
         None
@@ -117,15 +118,28 @@ fn build_source(
     (source, file_size)
 }
 
-fn parse_image_item(
-    item: &serde_json::Map<String, serde_json::Value>,
-) -> Option<ImageResult> {
+fn parse_image_item(item: &serde_json::Map<String, serde_json::Value>) -> Option<ImageResult> {
     let empty_map = serde_json::Map::new();
-    let result_obj = item.get("result").and_then(|r| r.as_object()).unwrap_or(&empty_map);
-    let text_in_grid = item.get("text_in_grid").and_then(|t| t.as_object()).unwrap_or(&empty_map);
-    let original_image = item.get("original_image").and_then(|o| o.as_object()).unwrap_or(&empty_map);
-    let thumbnail = item.get("thumbnail").and_then(|t| t.as_object()).unwrap_or(&empty_map);
-    let gsa = item.get("gsa").and_then(|g| g.as_object()).unwrap_or(&empty_map);
+    let result_obj = item
+        .get("result")
+        .and_then(|r| r.as_object())
+        .unwrap_or(&empty_map);
+    let text_in_grid = item
+        .get("text_in_grid")
+        .and_then(|t| t.as_object())
+        .unwrap_or(&empty_map);
+    let original_image = item
+        .get("original_image")
+        .and_then(|o| o.as_object())
+        .unwrap_or(&empty_map);
+    let thumbnail = item
+        .get("thumbnail")
+        .and_then(|t| t.as_object())
+        .unwrap_or(&empty_map);
+    let gsa = item
+        .get("gsa")
+        .and_then(|g| g.as_object())
+        .unwrap_or(&empty_map);
 
     let referrer_url = result_obj
         .get("referrer_url")
@@ -173,7 +187,12 @@ fn parse_image_item(
         .get("iptc")
         .and_then(|i| i.get("creator"))
         .and_then(|c| c.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
         .filter(|s| !s.is_empty());
 
     let resolution = if width > 0 && height > 0 {

@@ -1,4 +1,4 @@
-use html5ever::{parse_document, tendril::TendrilSink, ParseOpts};
+use html5ever::{ParseOpts, parse_document, tendril::TendrilSink};
 use markup5ever_rcdom::{Handle, NodeData, RcDom};
 
 /// Converts HTML to markdown by walking the DOM and extracting text with basic formatting.

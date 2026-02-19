@@ -6,8 +6,8 @@
 use std::{collections::HashMap, error::Error};
 
 use reqwest::{
-    header::{HeaderName, HeaderValue},
     Method,
+    header::{HeaderName, HeaderValue},
 };
 use scraper::{Html, Selector};
 

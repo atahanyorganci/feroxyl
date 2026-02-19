@@ -8,6 +8,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use tokio::task::JoinSet;
+
 mod bing;
 mod bing_images;
 mod brave;
@@ -25,7 +27,6 @@ pub use google::Google;
 pub use google_images::GoogleImages;
 pub use startpage::Startpage;
 pub use startpage_images::StartpageImages;
-use tokio::task::JoinSet;
 
 /// Unified search result type for all providers
 #[derive(Debug, Clone, serde::Serialize)]
@@ -613,7 +614,11 @@ pub async fn run_meta_image_search(
     while let Some(join_result) = results_set.join_next().await {
         let (engine_name, results) = match join_result {
             Ok(Ok((name, results))) => {
-                tracing::debug!(provider = name, count = results.len(), "Image provider completed");
+                tracing::debug!(
+                    provider = name,
+                    count = results.len(),
+                    "Image provider completed"
+                );
                 (name, results)
             }
             Ok(Err(e)) => {

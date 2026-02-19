@@ -7,8 +7,8 @@
 use std::{collections::HashMap, error::Error};
 
 use reqwest::{
-    header::{HeaderName, HeaderValue},
     Method, Url,
+    header::{HeaderName, HeaderValue},
 };
 use scraper::{Html, Selector};
 use serde::Deserialize;

@@ -9,8 +9,8 @@ use std::{
 
 use rand::Rng;
 use reqwest::{
-    header::{HeaderName, HeaderValue},
     Method, Url,
+    header::{HeaderName, HeaderValue},
 };
 use scraper::{ElementRef, Html, Selector};
 

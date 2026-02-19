@@ -8,8 +8,8 @@
 use std::{collections::HashMap, error::Error};
 
 use reqwest::{
-    header::{HeaderName, HeaderValue},
     Method, Url,
+    header::{HeaderName, HeaderValue},
 };
 use scraper::{Html, Selector};
 use serde::Deserialize;
@@ -274,7 +274,9 @@ fn get_image_result(item: &serde_json::Value) -> Option<ImageResult> {
         content: None,
         source: None,
         resolution,
-        img_format: item.get("format").and_then(|v| v.as_str().map(String::from)),
+        img_format: item
+            .get("format")
+            .and_then(|v| v.as_str().map(String::from)),
         filesize,
         author: None,
     })
@@ -286,8 +288,12 @@ fn parse_image_response(body: &str) -> Result<Vec<ImageResult>, Box<dyn Error + 
         return Err("Startpage CAPTCHA detected".into());
     }
 
-    let json_str = extr(body, "React.createElement(UIStartpage.AppSerpImages, {", "}})")
-        .ok_or("could not extract AppSerpImages JSON from response")?;
+    let json_str = extr(
+        body,
+        "React.createElement(UIStartpage.AppSerpImages, {",
+        "}})",
+    )
+    .ok_or("could not extract AppSerpImages JSON from response")?;
 
     let json_str = format!("{{{json_str}}}}}");
     let parsed: StartpageImagesResponse = serde_json::from_str(&json_str)
@@ -369,10 +375,7 @@ impl StartpageImages {
         &self,
         params: &SearchParams,
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
-        let sc_code = self
-            .sc_code
-            .as_ref()
-            .ok_or("sc-code not available")?;
+        let sc_code = self.sc_code.as_ref().ok_or("sc-code not available")?;
 
         let language = locale_to_language(&params.locale);
         let region = locale_to_region(&params.locale);
@@ -481,12 +484,12 @@ impl ImageSearchProvider for StartpageImages {
         }
 
         // First POST may return an interstitial page with sgt; submit again to get results.
-        if self.phase == StartpageImagesPhase::NeedSearch {
-            if let Some(sgt) = extract_sgt_from_interstitial(body) {
-                self.sgt = Some(sgt);
-                self.phase = StartpageImagesPhase::NeedSecondSearch;
-                return Ok(());
-            }
+        if self.phase == StartpageImagesPhase::NeedSearch
+            && let Some(sgt) = extract_sgt_from_interstitial(body)
+        {
+            self.sgt = Some(sgt);
+            self.phase = StartpageImagesPhase::NeedSecondSearch;
+            return Ok(());
         }
 
         self.results = parse_image_response(body)?;
@@ -515,7 +518,11 @@ mod tests {
     #[test]
     fn test_extr_app_serp_images() {
         let body = r#"React.createElement(UIStartpage.AppSerpImages, {"render":{"presenter":{"regions":{"mainline":[]}}}})"#;
-        let extracted = extr(body, "React.createElement(UIStartpage.AppSerpImages, {", "}})");
+        let extracted = extr(
+            body,
+            "React.createElement(UIStartpage.AppSerpImages, {",
+            "}})",
+        );
         assert!(extracted.is_some());
         let s = extracted.unwrap();
         assert!(s.contains("mainline"));

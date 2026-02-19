@@ -9,8 +9,8 @@ use std::{
 
 use base64::Engine;
 use reqwest::{
-    header::{HeaderName, HeaderValue},
     Method, Url,
+    header::{HeaderName, HeaderValue},
 };
 use scraper::{ElementRef, Html, Selector};
 
