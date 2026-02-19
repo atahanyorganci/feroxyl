@@ -17,7 +17,7 @@ const BASE_URL: &str = "https://html.duckduckgo.com/html/";
 const DDG_SEARCH_URL: &str = "https://duckduckgo.com/";
 
 /// `DuckDuckGo` region code from Locale: All -> "wt-wt"; otherwise lowercased with hyphens.
-fn locale_to_ddg_region(locale: &Locale) -> String {
+pub(crate) fn locale_to_ddg_region(locale: &Locale) -> String {
     match locale {
         Locale::All => "wt-wt".to_string(),
         Locale::EnUS => "en-us".to_string(),
@@ -52,7 +52,7 @@ pub struct DuckDuckGoResponse {
 }
 
 /// Extracts text between `begin` and `end` in `txt`
-fn extr(txt: &str, begin: &str, end: &str) -> Option<String> {
+pub(crate) fn extr(txt: &str, begin: &str, end: &str) -> Option<String> {
     let start_idx = txt.find(begin)?;
     let after_begin = start_idx + begin.len();
     let end_idx = txt[after_begin..].find(end)?;

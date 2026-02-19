@@ -16,7 +16,7 @@ use crate::engine::{ImageResult, ImageSearchProvider, SearchParams};
 const BASE_URL: &str = "https://unsplash.com/napi/search/photos";
 const PAGE_SIZE: u32 = 20;
 
-/// Remove `ixid` from URL query params (SearXNG compatibility).
+/// Remove `ixid` from URL query params (`SearXNG` compatibility).
 fn clean_url(url_str: &str) -> String {
     let Ok(mut url) = Url::parse(url_str) else {
         return url_str.to_string();
