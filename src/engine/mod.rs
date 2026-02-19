@@ -31,7 +31,7 @@ pub use google_images::GoogleImages;
 pub use startpage::Startpage;
 pub use startpage_images::StartpageImages;
 pub use unsplash::Unsplash;
-pub use yahoo::Yahoo;
+pub use yahoo::{Yahoo, YahooNews};
 pub use yandex::Yandex;
 
 /// Unified search result type for all providers
@@ -474,6 +474,7 @@ pub enum Provider {
     Startpage,
     Bing,
     Yahoo,
+    YahooNews,
     Yandex,
 }
 
@@ -497,6 +498,7 @@ impl std::str::FromStr for Provider {
             "startpage" => Ok(Provider::Startpage),
             "bing" => Ok(Provider::Bing),
             "yahoo" => Ok(Provider::Yahoo),
+            "yahoo_news" | "yn" => Ok(Provider::YahooNews),
             "yandex" => Ok(Provider::Yandex),
             other => Err(InvalidProvider(other.to_string())),
         }
@@ -525,6 +527,7 @@ impl Provider {
             Provider::Startpage => Startpage::name(),
             Provider::Bing => Bing::name(),
             Provider::Yahoo => Yahoo::name(),
+            Provider::YahooNews => YahooNews::name(),
             Provider::Yandex => Yandex::name(),
         }
     }
@@ -545,6 +548,7 @@ impl Provider {
             Provider::Startpage => run_provider::<Startpage>(params).await,
             Provider::Bing => run_provider::<Bing>(params).await,
             Provider::Yahoo => run_provider::<Yahoo>(params).await,
+            Provider::YahooNews => run_provider::<YahooNews>(params).await,
             Provider::Yandex => run_provider::<Yandex>(params).await,
         }
     }
