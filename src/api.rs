@@ -16,8 +16,8 @@ use reqwest::{
 use tower_http::trace::TraceLayer;
 
 use crate::engine::{
-    run_image_provider, run_meta_search, BingImages, ImageResult, Provider, RankedSearchResult,
-    SearchParams,
+    run_meta_image_search, run_meta_search, ImageProvider, Provider, RankedImageResult,
+    RankedSearchResult, SearchParams,
 };
 
 const DEFAULT_PROVIDERS: &[Provider] = &[
@@ -27,7 +27,36 @@ const DEFAULT_PROVIDERS: &[Provider] = &[
     Provider::Startpage,
 ];
 
+const DEFAULT_IMAGE_PROVIDERS: &[ImageProvider] = &[ImageProvider::BingImages];
+
 fn deserialize_providers<'de, D>(deserializer: D) -> Result<Vec<Provider>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum SingleOrSeq {
+        Single(String),
+        Seq(Vec<String>),
+    }
+
+    let parsed = <SingleOrSeq as serde::Deserialize>::deserialize(deserializer)?;
+    let strings: Vec<String> = match parsed {
+        SingleOrSeq::Single(s) => vec![s],
+        SingleOrSeq::Seq(v) => v,
+    };
+    let mut result = Vec::new();
+    for s in strings {
+        for part in s.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+            result.push(part.parse().map_err(de::Error::custom)?);
+        }
+    }
+    Ok(result)
+}
+
+fn deserialize_image_providers<'de, D>(deserializer: D) -> Result<Vec<ImageProvider>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -77,9 +106,17 @@ struct ImageSearchQuery {
     #[serde(rename = "q")]
     query: String,
     #[serde(default)]
+    safesearch: crate::engine::Safesearch,
+    #[serde(default)]
     time_range: crate::engine::TimeRange,
     #[serde(default)]
     locale: crate::engine::Locale,
+    #[serde(
+        default,
+        rename = "provider",
+        deserialize_with = "deserialize_image_providers"
+    )]
+    providers: Vec<ImageProvider>,
 }
 
 #[tracing::instrument(skip_all, fields(query = %query, safesearch = ?safesearch, time_range = ?time_range, locale = %locale))]
@@ -117,22 +154,29 @@ async fn search(
     Json(results)
 }
 
-#[tracing::instrument(skip_all, fields(query = %query, time_range = ?time_range, locale = %locale))]
+#[tracing::instrument(skip_all, fields(query = %query, safesearch = ?safesearch, time_range = ?time_range, locale = %locale))]
 async fn search_image(
     Query(ImageSearchQuery {
         query,
+        safesearch,
         time_range,
         locale,
+        providers,
     }): Query<ImageSearchQuery>,
-) -> Json<Vec<ImageResult>> {
+) -> Json<Vec<RankedImageResult>> {
     let params = SearchParams {
         query: query.clone(),
-        safesearch: crate::engine::Safesearch::default(),
+        safesearch,
         time_range,
         locale,
     };
     tracing::info!("Starting image search");
-    let results = match run_image_provider::<BingImages>(&params).await {
+    let providers: &[ImageProvider] = if providers.is_empty() {
+        DEFAULT_IMAGE_PROVIDERS
+    } else {
+        providers.as_slice()
+    };
+    let results = match run_meta_image_search(providers, &params).await {
         Ok(r) => {
             tracing::info!(count = r.len(), "Image search completed");
             r

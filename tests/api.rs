@@ -9,10 +9,10 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use feroxyl::{api, engine::ImageResult};
+use feroxyl::{api, engine::RankedImageResult};
 use tower::ServiceExt;
 
-fn assert_valid_image_results(results: &[ImageResult]) {
+fn assert_valid_image_results(results: &[RankedImageResult]) {
     assert!(!results.is_empty(), "expected at least one image result");
     for r in results {
         assert!(!r.url.is_empty(), "image result url should not be empty");
@@ -62,7 +62,7 @@ async fn search_image_endpoint_returns_results() {
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
-    let results: Vec<ImageResult> = serde_json::from_slice(&body).expect("valid JSON response");
+    let results: Vec<RankedImageResult> = serde_json::from_slice(&body).expect("valid JSON response");
 
     assert_valid_image_results(&results);
 }

@@ -189,6 +189,35 @@ pub struct RankedSearchResult {
     pub score: f64,
 }
 
+/// Ranked image result with score from meta-search merge.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RankedImageResult {
+    /// URL to the source page where the image is hosted.
+    pub url: String,
+    /// Full-size image URL (the actual image to display/download).
+    pub img_src: String,
+    /// Thumbnail URL for grid display. Falls back to `img_src` when absent.
+    pub thumbnail_src: Option<String>,
+    /// Image title or caption.
+    pub title: String,
+    /// Optional description or alt text.
+    pub content: Option<String>,
+    /// Source name (e.g. site name, domain).
+    pub source: Option<String>,
+    /// Resolution string (e.g. "1920 x 1080").
+    pub resolution: Option<String>,
+    /// Image format (e.g. "PNG", "JPEG").
+    pub img_format: Option<String>,
+    /// File size string (e.g. "1.2 MB").
+    pub filesize: Option<String>,
+    /// Creator or author.
+    pub author: Option<String>,
+    /// Provider positions (engine name, rank).
+    pub position: Vec<(String, usize)>,
+    /// Final score calculated from positions.
+    pub score: f64,
+}
+
 /// Runs a search provider until completion, executing HTTP requests with the given client.
 ///
 /// # Errors
@@ -488,4 +517,141 @@ impl Provider {
             Provider::Bing => run_provider::<Bing>(params).await,
         }
     }
+}
+
+/// Image search provider enum. Mirrors `Provider` for web search.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageProvider {
+    BingImages,
+}
+
+/// Error when parsing an invalid image provider string.
+#[derive(Debug, thiserror::Error)]
+#[error("invalid image provider: {0}")]
+pub struct InvalidImageProvider(pub String);
+
+impl std::str::FromStr for ImageProvider {
+    type Err = InvalidImageProvider;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "bing_images" | "bing" => Ok(ImageProvider::BingImages),
+            other => Err(InvalidImageProvider(other.to_string())),
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ImageProvider {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl ImageProvider {
+    #[must_use]
+    pub fn name(&self) -> &'static str {
+        match self {
+            ImageProvider::BingImages => BingImages::name(),
+        }
+    }
+
+    /// # Errors
+    ///
+    /// Returns an error if the provider fails (HTTP, parsing, or provider error).
+    pub async fn run(
+        &self,
+        params: &SearchParams,
+    ) -> Result<Vec<ImageResult>, Box<dyn Error + Send + Sync>> {
+        match self {
+            ImageProvider::BingImages => run_image_provider::<BingImages>(params).await,
+        }
+    }
+}
+
+/// Runs multiple image providers in parallel and merges results by URL with ranking.
+///
+/// # Errors
+///
+/// Does not fail overall; individual provider failures are logged and skipped.
+#[tracing::instrument(skip(params), fields(query = %params.query))]
+pub async fn run_meta_image_search(
+    providers: &[ImageProvider],
+    params: &SearchParams,
+) -> Result<Vec<RankedImageResult>, Box<dyn Error + Send + Sync>> {
+    let start = Instant::now();
+    tracing::debug!("Starting parallel image provider queries");
+    let mut results_set = JoinSet::new();
+    for provider in providers {
+        let name = provider.name();
+        tracing::debug!(provider = name, "Spawning image provider");
+        let provider = *provider;
+        let params = params.clone();
+        results_set
+            .spawn(async move { provider.run(&params).await.map(|results| (name, results)) });
+    }
+
+    let mut merged: HashMap<String, RankedImageResult> = HashMap::new();
+
+    while let Some(join_result) = results_set.join_next().await {
+        let (engine_name, results) = match join_result {
+            Ok(Ok((name, results))) => {
+                tracing::debug!(provider = name, count = results.len(), "Image provider completed");
+                (name, results)
+            }
+            Ok(Err(e)) => {
+                tracing::warn!(error = %e, "Image provider failed");
+                continue;
+            }
+            Err(e) => {
+                if e.is_cancelled() {
+                    break;
+                }
+                tracing::warn!(error = %e, "Image provider failed");
+                continue;
+            }
+        };
+        for (pos, r) in results.into_iter().enumerate() {
+            let rank = u32::try_from(pos + 1).unwrap_or(u32::MAX);
+            let score = 1.0 / f64::from(rank);
+            merged
+                .entry(r.url.clone())
+                .and_modify(|existing| {
+                    existing.position.push((engine_name.to_string(), pos + 1));
+                    existing.score += score;
+                })
+                .or_insert_with(|| RankedImageResult {
+                    url: r.url,
+                    img_src: r.img_src,
+                    thumbnail_src: r.thumbnail_src,
+                    title: r.title,
+                    content: r.content,
+                    source: r.source,
+                    resolution: r.resolution,
+                    img_format: r.img_format,
+                    filesize: r.filesize,
+                    author: r.author,
+                    position: vec![(engine_name.to_string(), pos + 1)],
+                    score,
+                });
+        }
+    }
+
+    let mut ranked: Vec<RankedImageResult> = merged.into_values().collect();
+    ranked.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    let elapsed = start.elapsed();
+    tracing::info!(
+        count = ranked.len(),
+        elapsed_ms = elapsed.as_millis(),
+        "Meta image search completed"
+    );
+    Ok(ranked)
 }
