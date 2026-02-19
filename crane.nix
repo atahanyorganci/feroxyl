@@ -3,7 +3,6 @@
     pkgs,
     craneLib,
     self',
-    inputs',
     ...
   }: let
     inherit (pkgs) lib;
@@ -33,7 +32,8 @@
     devShells.default = craneLib.devShell {
       # Inherit inputs from checks.
       checks = self'.checks;
-      RUST_SRC_PATH = "${inputs'.fenix.packages.stable.rust-src}/lib/rustlib/src/rust/library";
+      RUST_SRC_PATH = "${pkgs.rust-bin.nightly.latest.default}/lib/rustlib/src/rust/library";
+      DYLD_LIBRARY_PATH = "${pkgs.rust-bin.nightly.latest.default}/lib:$DYLD_LIBRARY_PATH";
     };
   };
 }

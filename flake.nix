@@ -12,10 +12,9 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    fenix = {
-      url = "github:nix-community/fenix";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
-      inputs.rust-analyzer-src.follows = "";
     };
   };
   outputs = inputs @ {
@@ -32,11 +31,25 @@
       ];
       systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin"];
       perSystem = {
+        system,
         self',
-        pkgs,
         ...
-      }: {
-        _module.args.craneLib = self.inputs.crane.mkLib pkgs;
+      }: let
+        pkgs = import self.inputs.nixpkgs {
+          inherit system;
+          overlays = [(import self.inputs.rust-overlay)];
+          config = {
+            allowUnfree = true;
+            allowBroken = true;
+          };
+        };
+        craneLib = (self.inputs.crane.mkLib pkgs).overrideToolchain (
+          p: p.rust-bin.nightly.latest.default.override {}
+        );
+      in {
+        _module.args = {
+          inherit pkgs craneLib;
+        };
         packages.default = self'.packages.feroxyl;
       };
       flake = {};
