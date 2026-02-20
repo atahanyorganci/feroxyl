@@ -41,6 +41,7 @@ feroxyl/
 │   ├── search_providers.rs # Provider integration tests
 │   └── api.rs              # API integration tests
 └── vendor/
+    ├── frontend/           # React/TSX UI; design system in src/index.css
     └── searxng/            # Git submodule; reference for porting engines
 ```
 
@@ -124,3 +125,61 @@ Always run formatters and linters to ensure code is formatted and linted correct
 ### Errors
 
 Using `thiserror` create custom descriptive error types that are used throughout the codebase.
+
+## Color Scheme and Design System
+
+**Design philosophy:** Ink on paper. Authoritative. Calm. Editorial.
+
+### Brand Palette
+
+| Token       | Light                     | Dark          | Usage                                |
+| ----------- | ------------------------- | ------------- | ------------------------------------ |
+| **Oxblood** | `#7F1D1D` / `0 63% 31%`   | `0 55% 45%`   | Primary actions, links, focus rings  |
+| **Gold**    | `#D4A373` / `30 53% 64%`  | `30 48% 55%`  | Accents, decorative lines, selection |
+| **Paper**   | `#F5F1E8` / `43 47% 94%`  | `222 25% 12%` | Cards, secondary surfaces            |
+| **Ink**     | `#111827` / `221 39% 11%` | `40 30% 92%`  | Primary text                         |
+
+### Surfaces and Text
+
+- **Background:** Warm off-white (`40 60% 98%`) in light; deep ink (`222 30% 8%`) in dark.
+- **Muted text:** `220 9% 46%` (light) / `40 15% 60%` (dark).
+- **Borders:** `42 20% 87%` (light) / `222 18% 22%` (dark).
+
+### Typography
+
+- **Serif:** Literata (headings, editorial emphasis).
+- **Sans:** Source Sans 3 (body, UI).
+- **Mono:** JetBrains Mono (URLs, keys, code).
+
+### Decorative Elements
+
+- **Top accent rule:** `linear-gradient(90deg, hsl(var(--oxblood)), hsl(var(--gold)) 60%, transparent)` or `rgb(127 29 29)` → `rgb(217 119 6)`.
+- **Ruled line:** Same gradient for section dividers.
+
+### Tailwind Mapping (Server-Side)
+
+When using Tailwind via CDN in `src/server/view.rs` (no CSS variables), use these equivalents:
+
+- Oxblood: `red-900`, `red-800` (hover).
+- Gold: `amber-500`.
+- Paper/surface: `stone-50`, `stone-100`, `stone-200`.
+- Ink: `slate-900`, `slate-500` (muted).
+
+## Markup Guidelines
+
+### Server-Side HTML (`src/server/view.rs`)
+
+- Use the **`markup`** crate for type-safe HTML generation.
+- Define reusable components with `markup::define! { ComponentName { ... } }`.
+- Build pages with `markup::new! { ... }` and always start with `@markup::doctype()`.
+- Use `markup::Render` and `.render(&mut buf)` or `.to_string()` for output.
+- Include Tailwind via CDN: `script[src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"]`.
+- Escape backticks when injecting HTML into `<script>` templates: `html.replace('`', r"\`")`.
+- Use Unicode entities for typography: `\u{2026}` (…), `\u{00a0}` (non-breaking space).
+
+### Frontend (React/TSX in `vendor/frontend/`)
+
+- Use Tailwind utility classes with CSS variables: `bg-background`, `text-foreground`, `text-oxblood`, `bg-paper`, `border-border`.
+- Use semantic HTML: `main`, `header`, `footer`, `kbd` for keyboard hints.
+- Apply design tokens: `font-serif`, `font-sans-ui`, `font-mono-url` for typography.
+- Use `ruled-line` for section dividers; `animate-fade-in`, `animate-slide-up` for entry animations.
