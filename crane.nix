@@ -1,4 +1,4 @@
-{
+{inputs, ...}: {
   perSystem = {
     pkgs,
     craneLib,
@@ -58,6 +58,18 @@
           }
         );
   in {
+    checks = {
+      # Audit dependencies
+      feroxyl-audit = craneLib.cargoAudit {
+        inherit src;
+        advisory-db = inputs.advisory-db;
+      };
+
+      # Audit licenses
+      feroxyl-deny = craneLib.cargoDeny {
+        inherit src;
+      };
+    };
     packages.feroxyl = feroxyl;
     devShells.default = craneLibNightly.devShell {
       checks = self'.checks;
