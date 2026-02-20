@@ -249,8 +249,11 @@ async fn scrape(Path(path): Path<String>) -> impl IntoResponse {
 
 markup::define! {
     SearchBar {
-        div["class" = "relative flex items-center w-full border border-stone-200 border-black bg-stone-50 transition-all duration-200 focus-within:border-red-900 focus-within:ring-2 focus-within:ring-red-900/20 focus-within:ring-offset-2 h-14 px-5 rounded"] {
-
+        form[
+            "class" = "relative flex items-center w-full border border-stone-200 border-black bg-stone-50 transition-all duration-200 focus-within:border-red-900 focus-within:ring-2 focus-within:ring-red-900/20 focus-within:ring-offset-2 h-14 px-5 rounded",
+            "action" = "/search",
+            "method" = "GET"
+        ] {
             input[
                 "name" = "q",
                 "placeholder" = "Search the catalogue\u{2026}",
@@ -259,7 +262,6 @@ markup::define! {
                 "autocomplete" = "off",
                 "autofocus" = true
             ] {}
-
             button[
                 "type" = "submit",
                 "class" = "shrink-0 rounded-sm bg-red-900 text-white font-sans font-medium transition-all duration-150 hover:bg-red-800 active:scale-95 tracking-wide px-5 py-2 text-sm"
