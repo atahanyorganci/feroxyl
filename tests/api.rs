@@ -9,7 +9,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use feroxyl::{api, engine::RankedImageResult};
+use feroxyl::{engine::RankedImageResult, server};
 use tower::ServiceExt;
 
 fn assert_valid_image_results(results: &[RankedImageResult]) {
@@ -33,7 +33,7 @@ fn assert_valid_image_results(results: &[RankedImageResult]) {
 
 #[tokio::test]
 async fn index_returns_html() {
-    let app = api::create_app();
+    let app = server::create_app();
 
     let request = Request::builder().uri("/").body(Body::empty()).unwrap();
 
@@ -53,15 +53,15 @@ async fn index_returns_html() {
         .unwrap();
     let html = std::str::from_utf8(&body).unwrap();
     assert!(html.contains("<title>Feroxyl</title>"));
-    assert!(html.contains("<main>"));
+    assert!(html.contains("<main"));
 }
 
 #[tokio::test]
 async fn search_image_endpoint_returns_200_with_query() {
-    let app = api::create_app();
+    let app = server::create_app();
 
     let request = Request::builder()
-        .uri("/search/image?q=rust")
+        .uri("/api/search/image?q=rust")
         .body(Body::empty())
         .unwrap();
 
@@ -73,10 +73,10 @@ async fn search_image_endpoint_returns_200_with_query() {
 #[tokio::test]
 #[ignore = "requires network access; run with: cargo test --test api -- --ignored"]
 async fn search_image_endpoint_returns_results() {
-    let app = api::create_app();
+    let app = server::create_app();
 
     let request = Request::builder()
-        .uri("/search/image?q=rust%20logo")
+        .uri("/api/search/image?q=rust%20logo")
         .body(Body::empty())
         .unwrap();
 
@@ -96,10 +96,10 @@ async fn search_image_endpoint_returns_results() {
 #[tokio::test]
 #[ignore = "requires network access; run with: cargo test --test api -- --ignored"]
 async fn search_image_google_images_returns_results() {
-    let app = api::create_app();
+    let app = server::create_app();
 
     let request = Request::builder()
-        .uri("/search/image?q=rust%20logo&provider=google_images")
+        .uri("/api/search/image?q=rust%20logo&provider=google_images")
         .body(Body::empty())
         .unwrap();
 

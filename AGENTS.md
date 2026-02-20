@@ -20,9 +20,12 @@ feroxyl/
 ├── crane.nix
 ├── src/
 │   ├── main.rs             # CLI entry point; runs providers and prints results
-│   ├── lib.rs              # Library root; re-exports api, engine, scrape
-│   ├── api.rs              # HTTP API routes and app factory (Axum)
+│   ├── lib.rs              # Library root; re-exports engine, scrape, server
 │   ├── scrape.rs           # HTML to Markdown conversion
+│   ├── server/
+│   │   ├── mod.rs          # App factory, shared query params (SearchQuery, etc.)
+│   │   ├── api.rs          # JSON API routes (/api/search, /api/search/image, /api/scrape)
+│   │   └── view.rs         # HTML views (/, /search)
 │   └── engine/
 │       ├── mod.rs          # SearchProvider, ImageSearchProvider, SearchResult, Provider enum
 │       ├── ddg/
@@ -43,19 +46,21 @@ feroxyl/
 
 ### Key Files
 
-| File                        | Purpose                                                                               |
-| --------------------------- | ------------------------------------------------------------------------------------- |
-| `src/engine/mod.rs`         | Defines `SearchProvider`, `ImageSearchProvider`, `SearchResult`, `Provider` enum.     |
-| `src/engine/ddg/mod.rs`     | Shared DDG utilities: `extr`, `locale_to_ddg_region`, `build_vqd_request`.            |
-| `src/engine/ddg/web.rs`     | DuckDuckGo web search; VQD token flow, pagination, time range filters.                |
-| `src/engine/ddg/news.rs`    | DuckDuckGo news search; JSON API at news.js.                                          |
-| `src/engine/google.rs`      | Google implementation; parses async/arc HTML format.                                  |
-| `src/engine/brave.rs`       | Brave search implementation.                                                          |
-| `src/engine/startpage.rs`   | Startpage search implementation.                                                      |
-| `src/engine/bing.rs`        | Bing search implementation.                                                           |
-| `src/engine/bing_images.rs` | Bing image search; implements `ImageSearchProvider`.                                  |
-| `src/api.rs`                | Axum routes: `/search`, `/image`, `/health`; `run_meta_search`, `run_image_provider`. |
-| `src/main.rs`               | CLI; demonstrates provider usage.                                                     |
+| File                        | Purpose                                                                           |
+| --------------------------- | --------------------------------------------------------------------------------- |
+| `src/engine/mod.rs`         | Defines `SearchProvider`, `ImageSearchProvider`, `SearchResult`, `Provider` enum. |
+| `src/engine/ddg/mod.rs`     | Shared DDG utilities: `extr`, `locale_to_ddg_region`, `build_vqd_request`.        |
+| `src/engine/ddg/web.rs`     | DuckDuckGo web search; VQD token flow, pagination, time range filters.            |
+| `src/engine/ddg/news.rs`    | DuckDuckGo news search; JSON API at news.js.                                      |
+| `src/engine/google.rs`      | Google implementation; parses async/arc HTML format.                              |
+| `src/engine/brave.rs`       | Brave search implementation.                                                      |
+| `src/engine/startpage.rs`   | Startpage search implementation.                                                  |
+| `src/engine/bing.rs`        | Bing search implementation.                                                       |
+| `src/engine/bing_images.rs` | Bing image search; implements `ImageSearchProvider`.                              |
+| `src/server/mod.rs`         | App factory `create_app`; shared `SearchQuery`, `ImageSearchQuery`.               |
+| `src/server/api.rs`         | JSON API: `/api/search`, `/api/search/image`, `/api/scrape/*path`.                |
+| `src/server/view.rs`        | HTML views: `/` (index), `/search` (streaming results).                           |
+| `src/main.rs`               | CLI; demonstrates provider usage.                                                 |
 
 ## Architecture
 
