@@ -5,12 +5,10 @@
 mod api;
 mod view;
 
-pub use api::routes as api_routes;
 use axum::Router;
 use tower_http::trace::TraceLayer;
-pub use view::routes as view_routes;
 
-use crate::engine::{ImageProvider, Provider};
+use crate::engine::{ImageProvider, Locale, Provider, Safesearch, TimeRange};
 
 pub(crate) const DEFAULT_PROVIDERS: &[Provider] = &[
     Provider::DuckDuckGo,
@@ -87,11 +85,11 @@ pub(crate) struct SearchQuery {
     #[serde(rename = "q")]
     pub query: String,
     #[serde(default)]
-    pub safesearch: crate::engine::Safesearch,
+    pub safesearch: Safesearch,
     #[serde(default)]
-    pub time_range: crate::engine::TimeRange,
+    pub time_range: TimeRange,
     #[serde(default)]
-    pub locale: crate::engine::Locale,
+    pub locale: Locale,
     #[serde(
         default,
         rename = "provider",
@@ -105,11 +103,11 @@ pub(crate) struct ImageSearchQuery {
     #[serde(rename = "q")]
     pub query: String,
     #[serde(default)]
-    pub safesearch: crate::engine::Safesearch,
+    pub safesearch: Safesearch,
     #[serde(default)]
-    pub time_range: crate::engine::TimeRange,
+    pub time_range: TimeRange,
     #[serde(default)]
-    pub locale: crate::engine::Locale,
+    pub locale: Locale,
     #[serde(
         default,
         rename = "provider",
@@ -120,7 +118,7 @@ pub(crate) struct ImageSearchQuery {
 
 pub fn create_app() -> Router<()> {
     Router::new()
-        .merge(view_routes())
-        .nest("/api", api_routes())
+        .merge(view::routes())
+        .nest("/api", api::routes())
         .layer(TraceLayer::new_for_http())
 }

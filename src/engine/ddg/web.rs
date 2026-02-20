@@ -12,7 +12,7 @@ use reqwest::{
 use scraper::{Html, Selector};
 
 use super::{build_vqd_request, extr, locale_to_ddg_region};
-use crate::engine::{SearchParams, SearchResult, TimeRange};
+use crate::engine::{SearchParams, SearchProvider, SearchResult, TimeRange};
 
 const BASE_URL: &str = "https://html.duckduckgo.com/html/";
 
@@ -235,7 +235,7 @@ impl DuckDuckGo {
     }
 }
 
-impl crate::engine::SearchProvider for DuckDuckGo {
+impl SearchProvider for DuckDuckGo {
     fn name() -> &'static str {
         "ddg"
     }
@@ -276,7 +276,7 @@ impl crate::engine::SearchProvider for DuckDuckGo {
         match parse_response(body) {
             Ok(response) => {
                 for r in response.results {
-                    self.results.push(crate::engine::SearchResult {
+                    self.results.push(SearchResult {
                         title: r.title,
                         url: r.url,
                         content: r.content,
@@ -289,9 +289,7 @@ impl crate::engine::SearchProvider for DuckDuckGo {
         }
     }
 
-    fn results(
-        &mut self,
-    ) -> Option<Result<Vec<crate::engine::SearchResult>, Box<dyn Error + Send + Sync>>> {
+    fn results(&mut self) -> Option<Result<Vec<SearchResult>, Box<dyn Error + Send + Sync>>> {
         if self.results.is_empty() {
             None
         } else {

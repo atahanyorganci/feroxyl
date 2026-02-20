@@ -13,9 +13,12 @@ use reqwest::{
 };
 
 use super::{DEFAULT_IMAGE_PROVIDERS, DEFAULT_PROVIDERS, ImageSearchQuery, SearchQuery};
-use crate::engine::{
-    ImageProvider, Provider, RankedImageResult, RankedSearchResult, SearchParams,
-    run_meta_image_search, run_meta_search,
+use crate::{
+    engine::{
+        ImageProvider, Provider, RankedImageResult, RankedSearchResult, SearchParams,
+        run_meta_image_search, run_meta_search,
+    },
+    scrape::html_to_markdown,
 };
 
 #[tracing::instrument(skip_all, fields(query = %query, safesearch = ?safesearch, time_range = ?time_range, locale = %locale))]
@@ -130,7 +133,7 @@ async fn scrape(Path(path): Path<String>) -> impl IntoResponse {
             Ok(body) => (
                 StatusCode::OK,
                 [(header::CONTENT_TYPE, "text/markdown; charset=utf-8")],
-                crate::scrape::html_to_markdown(&body),
+                html_to_markdown(&body),
             )
                 .into_response(),
             Err(e) => (StatusCode::BAD_GATEWAY, e.to_string()).into_response(),

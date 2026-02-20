@@ -7,17 +7,17 @@
 
 use feroxyl::engine::{
     Bing, BingImages, Brave, DuckDuckGo, DuckDuckGoDefinitions, DuckDuckGoNews, Google,
-    ImageResult, Provider, RankedSearchResult, SearchParams, SearchResult, Startpage,
-    StartpageImages, TimeRange, Unsplash, Yahoo, YahooNews, Yandex, run_image_provider,
+    ImageResult, Locale, Provider, RankedSearchResult, Safesearch, SearchParams, SearchResult,
+    Startpage, StartpageImages, TimeRange, Unsplash, Yahoo, YahooNews, Yandex, run_image_provider,
     run_meta_search, run_provider,
 };
 
 fn default_params(query: &str) -> SearchParams {
     SearchParams {
         query: query.to_string(),
-        safesearch: feroxyl::engine::Safesearch::default(),
+        safesearch: Safesearch::default(),
         time_range: TimeRange::default(),
-        locale: feroxyl::engine::Locale::default(),
+        locale: Locale::default(),
     }
 }
 
@@ -262,7 +262,7 @@ async fn unsplash_search_returns_results() {
 async fn google_search_with_time_range_and_safesearch() {
     let mut params = default_params("open source search");
     params.time_range = TimeRange::Month;
-    params.safesearch = feroxyl::engine::Safesearch::Moderate;
+    params.safesearch = Safesearch::Moderate;
 
     let results = run_provider::<Google>(&params)
         .await

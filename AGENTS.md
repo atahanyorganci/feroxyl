@@ -104,6 +104,12 @@ Common parameters (mirrors SearXNG): `query`, `safesearch`, `time_range`, `local
 
 ## Coding Style
 
+### Import/Export
+
+- No aliases. Never `use api::routes as api_routes;` or similar aliases. Always use the full path to the module, or import the elements directly.
+- Keep public exports to a minimum. Only export the types and functions that are needed by the public API.
+- Prefer importing instead of writing `create::engine::TimeRange` instead use `use create::engine::TimeRange;`.
+
 ### External IO
 
 Code should be structured so that IO operations are handled externally to how the business logic, search providers, are implemented. This is to allow for the business logic to be tested in isolation, and to allow for the IO operations to be mocked for testing.
@@ -113,7 +119,7 @@ Code should be structured so that IO operations are handled externally to how th
 Always run formatters and linters to ensure code is formatted and linted correctly.
 
 - Formatter `nix fmt`, this command formats all sources in the repository.
-- Rust linter: `nix develop --command "cargo clippy"`
+- Rust linter: `nix develop --command cargo clippy`
 
 ### Errors
 
