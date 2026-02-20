@@ -2,11 +2,13 @@
 //!
 //! Exposed for integration testing and server setup.
 
+use std::convert::Infallible;
+
 use axum::{
     Json, Router,
     body::Body,
     extract::{Path, Query},
-    http::{StatusCode, header},
+    http::{Response, StatusCode, header},
     response::IntoResponse,
     routing::get,
 };
@@ -18,8 +20,8 @@ use reqwest::{
 use tower_http::trace::TraceLayer;
 
 use crate::engine::{
-    ImageProvider, Provider, RankedImageResult, RankedSearchResult, SearchParams,
-    run_meta_image_search, run_meta_search,
+    ImageProvider, Locale, Provider, RankedImageResult, RankedSearchResult, Safesearch,
+    SearchParams, TimeRange, run_meta_image_search, run_meta_search,
 };
 
 const DEFAULT_PROVIDERS: &[Provider] = &[
@@ -352,11 +354,72 @@ async fn index() -> impl IntoResponse {
     )
 }
 
+markup::define! {
+    SearchShell<'a>(query: &'a str) {
+        html {
+            head {
+                title { "Feroxyl - " {query} }
+            }
+            body {
+                h1 { "Results for: " {query} }
+                div[id = "results"] {
+                    p { "Loading..." }
+                }
+                // This spot is where streamed scripts will arrive
+            }
+        }
+    }
+
+    SearchResultFragment<'a>(results: &'a [RankedSearchResult]) {
+        @for result in results.iter() {
+            div.result {
+                a[href = &result.url] { {&result.title} }
+                @if let Some(content) = &result.content {
+                    p { {content} }
+                }
+            }
+        }
+    }
+}
+
+async fn search_handler(Query(SearchQuery { query, .. }): Query<SearchQuery>) -> impl IntoResponse {
+    let body = Body::from_stream(async_stream::stream! {
+        let shell = SearchShell { query: &query }.to_string();
+        yield Ok::<_, Infallible>(shell);
+
+        // 2. Do the actual search (takes time)
+        let params = SearchParams {
+            query: query,
+            safesearch: Safesearch::Off,
+            time_range: TimeRange::Any,
+            locale: Locale::EnUS,
+        };
+        let results = run_meta_search(DEFAULT_PROVIDERS, &params).await.unwrap();
+        let html = SearchResultFragment { results: &results }.to_string();
+
+        // 3. Send a script that swaps in the results
+        let script = format!(
+            r#"<script>
+                    document.getElementById("results").innerHTML = `{}`;
+                </script>"#,
+            html.replace('`', r"\`")
+        );
+        yield Ok::<_, Infallible>(script);
+    });
+
+    Response::builder()
+        .header("Content-Type", "text/html")
+        .header("Transfer-Encoding", "chunked")
+        .body(body)
+        .unwrap()
+}
+
 pub fn create_app() -> Router<()> {
     Router::new()
         .route("/", get(index))
-        .route("/search", get(search))
-        .route("/search/image", get(search_image))
-        .route("/scrape/*path", get(scrape))
+        .route("/search", get(search_handler))
+        .route("/api/search", get(search))
+        .route("/api/search/image", get(search_image))
+        .route("/api/scrape/*path", get(scrape))
         .layer(TraceLayer::new_for_http())
 }

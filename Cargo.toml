@@ -5,6 +5,7 @@ edition = "2024"
 license = "MIT"
 
 [dependencies]
+async-stream = "0.3.6"
 axum = { version = "0.7", features = ["json"] }
 base64 = "0.22"
 html5ever = "0.38.0"
