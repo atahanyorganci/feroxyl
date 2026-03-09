@@ -19,6 +19,8 @@
         config = {
           Cmd = [
             "${self'.packages.feroxyl}/bin/feroxyl"
+            "--address"
+            "0.0.0.0"
           ];
         };
       };
