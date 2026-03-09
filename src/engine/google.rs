@@ -1,13 +1,7 @@
-//! Google search engine
-//!
-//! Port of `SearXNG`'s google.py engine. Uses async/arc HTML format.
+//! Google search engine using HTML scraping.
 
-use std::{
-    error::Error,
-    time::{Duration, Instant},
-};
+use std::error::Error;
 
-use rand::Rng;
 use reqwest::{
     Method, Url,
     header::{HeaderName, HeaderValue},
@@ -15,9 +9,6 @@ use reqwest::{
 use scraper::{ElementRef, Html, Selector};
 
 use crate::engine::{Locale, Safesearch, SearchParams, SearchProvider, SearchResult, TimeRange};
-
-/// Charset for `arc_id` random string (matches `SearXNG`: a-zA-Z0-9_-)
-const ARC_ID_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
 
 /// Time range to Google tbs (qdr:) code
 fn time_range_to_google_tbs(tr: TimeRange) -> Option<&'static str> {
@@ -68,10 +59,7 @@ fn locale_to_google_cr(locale: &Locale) -> Option<&'static str> {
     }
 }
 
-fn build_google_search_url(
-    params: &SearchParams,
-    async_param: &str,
-) -> Result<Url, Box<dyn Error>> {
+fn build_google_search_url(params: &SearchParams) -> Result<Url, Box<dyn Error>> {
     let start = 0u32;
     let mut url = Url::parse("https://www.google.com/search")?;
     {
@@ -89,9 +77,7 @@ fn build_google_search_url(
             .append_pair("ie", "utf8")
             .append_pair("oe", "utf8")
             .append_pair("filter", "0")
-            .append_pair("start", &start.to_string())
-            .append_pair("asearch", "arc")
-            .append_pair("async", async_param);
+            .append_pair("start", &start.to_string());
         if let Some(tbs) = time_range_to_google_tbs(params.time_range) {
             pairs.append_pair("tbs", &format!("qdr:{tbs}"));
         }
@@ -103,15 +89,7 @@ fn build_google_search_url(
 }
 
 fn extract_title(element: ElementRef) -> Result<String, Box<dyn Error>> {
-    let selector = Selector::parse("div[role='link']").unwrap();
-    if let Some(element) = element.select(&selector).next() {
-        return Ok(element.text().collect::<String>());
-    }
     let selector = Selector::parse("div[role*='link']").unwrap();
-    if let Some(element) = element.select(&selector).next() {
-        return Ok(element.text().collect::<String>());
-    }
-    let selector = Selector::parse("[data-snf='GuLy6c']").unwrap();
     if let Some(element) = element.select(&selector).next() {
         return Ok(element.text().collect::<String>());
     }
@@ -134,19 +112,21 @@ fn extract_content(element: ElementRef) -> Option<String> {
     }
 }
 
+/// Extract the destination URL from a Google result element.
+///
+/// Google wraps result links in redirects like `/url?q=<real_url>&sa=U&...`.
+/// We grab the first `<a>` href, strip the 7-char `/url?q=` prefix, and
+/// split on `&sa=U` to isolate the actual URL.
 fn extract_url(root: ElementRef) -> Result<String, Box<dyn Error>> {
-    let link_selector = Selector::parse("a[href*='/url?q=']").unwrap();
+    let link_selector = Selector::parse("a[href]").unwrap();
     if let Some(link) = root.select(&link_selector).next() {
         let href = link.value().attr("href").unwrap();
-        let url = format!("https://www.google.com{href}");
-        let url = Url::parse(&url).unwrap();
-        let url = url
-            .query_pairs()
-            .find(|(key, _)| key == "q")
-            .unwrap()
-            .1
-            .to_string();
-        Ok(url)
+        if let Some(raw) = href.strip_prefix("/url?q=") {
+            let url = raw.split("&sa=U").next().unwrap_or(raw);
+            Ok(urlencoding::decode(url)?.into_owned())
+        } else {
+            Ok(href.to_string())
+        }
     } else {
         Err("No link found".into())
     }
@@ -156,6 +136,9 @@ fn parse_google_result(element: ElementRef) -> Result<SearchResult, Box<dyn Erro
     let title = extract_title(element)?;
     let url = extract_url(element)?;
     let content = extract_content(element);
+    if content.is_none() {
+        return Err("No content found".into());
+    }
     Ok(SearchResult {
         title,
         url,
@@ -164,46 +147,9 @@ fn parse_google_result(element: ElementRef) -> Result<SearchResult, Box<dyn Erro
 }
 
 /// Stateful Google search provider implementing `SearchProvider`.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Google {
     results: Vec<SearchResult>,
-    /// `arc_id` prefix, regenerated every hour (`SearXNG` behavior)
-    arc_id_prefix: Option<String>,
-    arc_id_created_at: Option<Instant>,
-}
-
-impl Default for Google {
-    fn default() -> Self {
-        Self {
-            results: Vec::with_capacity(32),
-            arc_id_prefix: None,
-            arc_id_created_at: None,
-        }
-    }
-}
-
-impl Google {
-    /// Format of the async parameter for Google's arc UI.
-    /// `arc_id` is randomly generated and cached for 1 hour on the provider.
-    fn ui_async(&mut self, start: u32) -> String {
-        let invalidate = self.arc_id_prefix.is_none()
-            || self
-                .arc_id_created_at
-                .is_none_or(|t| t.elapsed() > Duration::from_hours(1));
-
-        if invalidate {
-            let mut rng = rand::rng();
-            self.arc_id_prefix = Some(
-                (0..23)
-                    .map(|_| ARC_ID_CHARSET[rng.random_range(0..ARC_ID_CHARSET.len())] as char)
-                    .collect(),
-            );
-            self.arc_id_created_at = Some(Instant::now());
-        }
-
-        let prefix = self.arc_id_prefix.as_ref().unwrap();
-        format!("arc_id:srp_{prefix}_1{start:02},use_ac:true,_fmt:prog")
-    }
 }
 
 impl SearchProvider for Google {
@@ -215,35 +161,13 @@ impl SearchProvider for Google {
         &mut self,
         params: &SearchParams,
     ) -> Result<reqwest::Request, Box<dyn Error + Send + Sync>> {
-        let start = 0u32;
-        let async_param = self.ui_async(start);
-        let url = build_google_search_url(params, &async_param)
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        let url =
+            build_google_search_url(params).map_err(|e| std::io::Error::other(e.to_string()))?;
         let mut request = reqwest::Request::new(Method::GET, url);
         let headers = request.headers_mut();
         headers.insert(
             HeaderName::from_static("accept"),
             HeaderValue::from_static("*/*"),
-        );
-        headers.insert(
-            HeaderName::from_static("sec-fetch-dest"),
-            HeaderValue::from_static("empty"),
-        );
-        headers.insert(
-            HeaderName::from_static("sec-fetch-mode"),
-            HeaderValue::from_static("cors"),
-        );
-        headers.insert(
-            HeaderName::from_static("sec-fetch-site"),
-            HeaderValue::from_static("same-origin"),
-        );
-        headers.insert(
-            HeaderName::from_static("sec-fetch-user"),
-            HeaderValue::from_static("?1"),
-        );
-        headers.insert(
-            HeaderName::from_static("sec-gpc"),
-            HeaderValue::from_static("1"),
         );
         headers.insert(
             HeaderName::from_static("user-agent"),
@@ -259,19 +183,7 @@ impl SearchProvider for Google {
     }
 
     fn parse_response(&mut self, body: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let mut html = body.to_string();
-        let start_index = html.find("<div").ok_or_else(|| {
-            tracing::warn!("Google response: no <div> start marker found");
-            std::io::Error::other("No <div> found")
-        })?;
-        html = html[start_index..].to_string();
-        let end_index = html.rfind("</div>").ok_or_else(|| {
-            tracing::warn!("Google response: no </div> end marker found");
-            std::io::Error::other("No </div> found")
-        })?;
-        html = html[..end_index].to_string();
-
-        let document = Html::parse_fragment(&html);
+        let document = Html::parse_document(body);
         let selector = Selector::parse("div.MjjYud").unwrap();
         let mut skipped = 0u32;
         for result in document.select(&selector) {
