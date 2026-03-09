@@ -8,6 +8,7 @@ license = "MIT"
 async-stream = "0.3.6"
 axum = { version = "0.7", features = ["json"] }
 base64 = "0.22"
+clap = { version = "4.5.60", features = ["derive"] }
 html5ever = "0.38.0"
 markup = "0.16.0"
 markup5ever_rcdom = "0.38.0"
