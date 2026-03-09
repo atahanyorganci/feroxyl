@@ -69,6 +69,19 @@
       feroxyl-deny = craneLib.cargoDeny {
         inherit src;
       };
+
+      # Clippy
+      feroxyl-clippy = craneLibNightly.cargoClippy (commonArgs
+        // {
+          inherit cargoArtifacts;
+          cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+        });
+
+      # Tests
+      feroxyl-test = craneLibNightly.cargoTest (commonArgs
+        // {
+          inherit cargoArtifacts;
+        });
     };
     packages.feroxyl = feroxyl;
     devShells.default = craneLibNightly.devShell {
